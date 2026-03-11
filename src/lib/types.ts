@@ -92,6 +92,7 @@ export interface Workshop {
 }
 
 export type WorksheetTemplateKey =
+  | 'observation_log'
   | 'hmw'
   | 'persona'
   | 'empathy_map'
@@ -101,15 +102,160 @@ export type WorksheetTemplateKey =
   | 'test_result'
   | 'reflection';
 
+export type WorksheetContributorRole = 'activist' | 'facilitator';
+
 export interface WorksheetEntry {
   id: number;
+  token_id: number | null;
   workshop_id: number;
   template_key: WorksheetTemplateKey;
-  filled_by: number | null;
+  group_name: string;
+  filled_by_name: string;
+  filled_by_role: WorksheetContributorRole;
   content_json: string;
   submitted_at: string | null;
   reviewed: boolean;
+  reviewed_by: string;
+  reviewed_at: string | null;
+  review_note: string;
 }
+
+export interface WorksheetToken {
+  id: number;
+  token: string;
+  workshop_id: number;
+  template_key: WorksheetTemplateKey;
+  created_at: string;
+  expires_at: string | null;
+  active: boolean;
+}
+
+export interface ObservationItem {
+  time: string;
+  who: string;
+  what: string;
+  how: string;
+  note: string;
+  emotion_hint: string;
+}
+
+export interface ObservationLogContent {
+  observation_date: string;
+  location: string;
+  subject_codes: string[];
+  observer_role: string;
+  context_description: string;
+  observations: ObservationItem[];
+  photos_note: string;
+  key_finding: string;
+  questions_raised: string;
+}
+
+export interface HmwContent {
+  problem_context: string;
+  target_subject: string;
+  questions: string[];
+  key_insight: string;
+}
+
+export interface PersonaContent {
+  subject_code: string;
+  age_group: string;
+  daily_routine: string;
+  needs: string[];
+  pains: string[];
+  gains: string;
+  quote: string;
+}
+
+export interface EmpathyMapContent {
+  says: string;
+  thinks: string;
+  does: string;
+  feels: string;
+  core_pain: string;
+  core_gain: string;
+}
+
+export interface JourneyMapStage {
+  name: string;
+  action: string;
+  emotion: number;
+  pain_point: string;
+  opportunity: string;
+}
+
+export interface JourneyMapContent {
+  persona_code: string;
+  stages: JourneyMapStage[];
+}
+
+export interface IdeaCardContent {
+  title: string;
+  related_hmw: string;
+  description: string;
+  required_resources: string;
+  feasibility: number;
+  field_relevance: number;
+  vote_count: number;
+}
+
+export interface PrototypeSpecContent {
+  idea_title: string;
+  problem_to_solve: string;
+  target_users: string;
+  core_function: string;
+  prototype_type: 'physical' | 'digital' | 'service' | 'process';
+  components: string[];
+  test_scenario: string;
+  success_criteria: string;
+}
+
+export interface TestResultContent {
+  test_date: string;
+  location: string;
+  participants: string[];
+  process_summary: string;
+  went_well: string;
+  needs_improvement: string;
+  participant_feedback: string;
+  next_action: string;
+  overall_score: number;
+}
+
+export interface ReflectionContent {
+  what_i_did: string;
+  what_i_learned: string;
+  what_was_hard: string;
+  what_i_want_to_try: string;
+  message_to_team: string;
+}
+
+export type WorksheetContent =
+  | ObservationLogContent
+  | HmwContent
+  | PersonaContent
+  | EmpathyMapContent
+  | JourneyMapContent
+  | IdeaCardContent
+  | PrototypeSpecContent
+  | TestResultContent
+  | ReflectionContent;
+
+export const WORKSHOP_TEMPLATE_MAP: Record<number, WorksheetTemplateKey[]> = {
+  1: ['reflection'],
+  2: ['observation_log', 'reflection'],
+  3: ['observation_log', 'persona'],
+  4: ['hmw', 'persona'],
+  5: ['empathy_map'],
+  6: ['journey_map'],
+  7: ['idea_card'],
+  8: ['idea_card'],
+  9: ['prototype_spec'],
+  10: ['test_result'],
+  11: ['test_result'],
+  12: ['reflection'],
+};
 
 export interface ChecklistItem {
   id: number;
@@ -122,6 +268,53 @@ export interface ChecklistItem {
   completed_date: string | null;
   completed_by: string | null;
   evidence_note: string;
+}
+
+export type SafetyLogType = 'consent' | 'anonymization' | 'incident' | 'stop_criterion';
+export type SafetySeverity = 'info' | 'warning' | 'critical';
+export type FacilitatorRole = 'facilitator' | 'recorder' | 'safety_officer' | 'photographer';
+
+export interface SafetyLog {
+  id: number;
+  phase: LivingLabPhase;
+  workshop_id: number | null;
+  log_type: SafetyLogType;
+  description: string;
+  recorder: string;
+  severity: SafetySeverity;
+  resolved: boolean;
+  resolved_note: string;
+  created_at: string;
+}
+
+export interface FacilitatorRoleAssignment {
+  id: number;
+  workshop_id: number;
+  participant_id: number;
+  participant_name: string;
+  role: FacilitatorRole;
+  notes: string;
+}
+
+export interface FieldPhoto {
+  id: number;
+  workshop_id: number | null;
+  worksheet_id: number | null;
+  phase: LivingLabPhase | null;
+  filename: string;
+  original_name: string;
+  description: string;
+  taken_by: string;
+  taken_at: string | null;
+  consent_verified: boolean;
+  created_at: string;
+}
+
+export interface PhaseGateResult {
+  phase: LivingLabPhase;
+  can_proceed: boolean;
+  blocking_items: ChecklistItem[];
+  warning_items: ChecklistItem[];
 }
 
 export interface KpiItem {
