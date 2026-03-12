@@ -5,6 +5,7 @@ import type {
   LivingLabPhase,
   ProgressStatus,
   Workshop,
+  WorksheetContributorRole,
   WorksheetEntry,
   WorksheetTemplateKey,
   WorkshopType,
@@ -37,12 +38,18 @@ const workshopFields = new Set([
 ]);
 
 const worksheetFields = new Set([
+  'token_id',
   'workshop_id',
   'template_key',
-  'filled_by',
+  'group_name',
+  'filled_by_name',
+  'filled_by_role',
   'content_json',
   'submitted_at',
   'reviewed',
+  'reviewed_by',
+  'reviewed_at',
+  'review_note',
 ]);
 
 function toWorksheetEntry(row: WorksheetRow): WorksheetEntry {
@@ -81,7 +88,7 @@ function normalizeWorkshopValue(field: string, value: unknown) {
 }
 
 function normalizeWorksheetValue(field: string, value: unknown) {
-  if (field === 'workshop_id' || field === 'filled_by') {
+  if (field === 'token_id' || field === 'workshop_id') {
     return value === null || value === '' ? null : Number(value);
   }
 
@@ -89,11 +96,15 @@ function normalizeWorksheetValue(field: string, value: unknown) {
     return String(value) as WorksheetTemplateKey;
   }
 
+  if (field === 'filled_by_role') {
+    return String(value) as WorksheetContributorRole;
+  }
+
   if (field === 'reviewed') {
     return value ? 1 : 0;
   }
 
-  if (field === 'submitted_at') {
+  if (field === 'submitted_at' || field === 'reviewed_at') {
     return value ? String(value) : null;
   }
 

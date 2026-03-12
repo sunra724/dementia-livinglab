@@ -13,6 +13,7 @@ import {
   FolderKanban,
   Megaphone,
   ShieldCheck,
+  Users,
   Wallet,
 } from 'lucide-react';
 import KpiCard from '@/components/dashboard/KpiCard';
@@ -24,6 +25,7 @@ import type {
   ChecklistItem,
   KpiItem,
   LivingLabPhase,
+  PhaseGateResult,
   ProgressStatus,
   PromotionChannel,
   PromotionRecord,
@@ -40,6 +42,10 @@ interface OverviewDashboardProps {
 interface WorkshopsResponse {
   workshops: Workshop[];
   worksheetEntries: WorksheetEntry[];
+}
+
+interface SafetyResponse {
+  gate_status: PhaseGateResult[];
 }
 
 interface SummaryCard {
@@ -195,9 +201,15 @@ export default function OverviewDashboard({ mode }: OverviewDashboardProps) {
     isLoading: budgetLoading,
     mutate: mutateBudget,
   } = useSWR<BudgetItem[]>('/api/budget', fetcher);
+  const {
+    data: safetyData,
+    error: safetyError,
+    isLoading: safetyLoading,
+    mutate: mutateSafety,
+  } = useSWR<SafetyResponse>('/api/safety', fetcher);
 
-  const isLoading = kpiLoading || workshopLoading || guidebookLoading || promotionLoading || budgetLoading;
-  const hasError = Boolean(kpiError || workshopError || guidebookError || promotionError || budgetError);
+  const isLoading = kpiLoading || workshopLoading || guidebookLoading || promotionLoading || budgetLoading || safetyLoading;
+  const hasError = Boolean(kpiError || workshopError || guidebookError || promotionError || budgetError || safetyError);
 
   if (isLoading) {
     return <DashboardLoading />;
@@ -209,7 +221,8 @@ export default function OverviewDashboard({ mode }: OverviewDashboardProps) {
     !workshopPayload ||
     !checklistItems ||
     !promotionItems ||
-    !budgetItems
+    !budgetItems ||
+    !safetyData
   ) {
     return (
       <DashboardError
@@ -220,6 +233,7 @@ export default function OverviewDashboard({ mode }: OverviewDashboardProps) {
             mutateGuidebook(),
             mutatePromotion(),
             mutateBudget(),
+            mutateSafety(),
           ]);
         }}
       />
@@ -305,7 +319,7 @@ export default function OverviewDashboard({ mode }: OverviewDashboardProps) {
     {
       title: '이번 달 워크숍',
       value: `${currentMonthWorkshops.length}건`,
-      description: `${currentYear}년 ${currentMonth}월 예정 일정 기준`,
+      description: `${currentYear}년 ${currentMonth}월 일정 기준`,
       icon: CalendarDays,
       href: mode === 'admin' ? '/admin/workshops' : undefined,
     },
@@ -314,7 +328,7 @@ export default function OverviewDashboard({ mode }: OverviewDashboardProps) {
       value: `${currentMonthChecklistCount}건`,
       description: '가이드북 완료 처리 건수',
       icon: ClipboardCheck,
-      href: mode === 'admin' ? '/admin/kpi' : undefined,
+      href: mode === 'admin' ? '/guidebook' : undefined,
     },
     {
       title: '이번 달 집행액',
@@ -326,11 +340,12 @@ export default function OverviewDashboard({ mode }: OverviewDashboardProps) {
   ];
 
   const quickLinks = [
-    { href: '/admin/participants', label: '참가자 관리', icon: ShieldCheck },
+    { href: '/admin/participants', label: '참가자 관리', icon: Users },
     { href: '/admin/workshops', label: '워크숍 관리', icon: CalendarDays },
-    { href: '/admin/kpi', label: 'KPI·체크리스트', icon: ClipboardCheck },
+    { href: '/admin/kpi', label: 'KPI 관리', icon: ClipboardCheck },
     { href: '/admin/budget', label: '사업비 관리', icon: Wallet },
     { href: '/admin/promotion', label: '홍보 관리', icon: Megaphone },
+    { href: '/admin/safety', label: '안전·윤리', icon: ShieldCheck },
     { href: '/guidebook', label: '가이드북 보기', icon: FolderKanban },
   ];
 
@@ -369,7 +384,7 @@ export default function OverviewDashboard({ mode }: OverviewDashboardProps) {
               치매돌봄 리빙랩 통합 성과관리 대시보드
             </h1>
             <p className="mt-2 text-sm text-slate-600">
-              지역사회와 대학, 치매 당사자와 가족, 참여기관이 함께 만드는 리빙랩의 전 과정을 한 화면에서 확인합니다.
+              지역사회와 대학, 치매 당사자와 가족 참여기관이 함께 만드는 리빙랩의 전 과정을 한 화면에서 확인합니다.
             </p>
           </div>
           <div className="flex flex-wrap gap-3 text-sm text-slate-500">
@@ -421,8 +436,8 @@ export default function OverviewDashboard({ mode }: OverviewDashboardProps) {
           <p className="text-sm font-medium text-slate-500">사업 개요</p>
           <h2 className="mt-2 text-2xl font-semibold text-slate-950">치매돌봄 리빙랩 6단계 통합 운영</h2>
           <p className="mt-4 text-sm leading-6 text-slate-600">
-            협동조합 소이랩이 준비부터 확산까지의 전 단계를 운영하며, 참여기관과 함께 현장 기반 문제 발굴, 아이디어 도출,
-            프로토타입 설계, 테스트, 확산 전략 수립까지 연결합니다.
+            협동조합 소이랩이 준비 단계부터 확산까지의 전 과정을 운영하며, 참여기관과 함께 현장 기반 문제 발견,
+            아이디어 도출, 프로토타입 설계, 테스트, 확산 전략까지 연결합니다.
           </p>
 
           <div className="mt-6 grid gap-4 md:grid-cols-3">
@@ -453,18 +468,23 @@ export default function OverviewDashboard({ mode }: OverviewDashboardProps) {
                 현재: {currentPhase}단계 {phaseTitles[currentPhase]}
               </h2>
             </div>
-            {mode === 'view' && (
+            {mode === 'view' ? (
               <Link
                 href={`/guidebook?phase=${currentPhase}`}
                 className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200"
               >
                 단계 상세 보기
               </Link>
-            )}
+            ) : null}
           </div>
 
           <div className="mt-6">
-            <PhaseTimeline currentPhase={currentPhase} phaseStatuses={phaseStatuses} onPhaseClick={handlePhaseClick} />
+            <PhaseTimeline
+              currentPhase={currentPhase}
+              phaseStatuses={phaseStatuses}
+              gateResults={safetyData.gate_status}
+              onPhaseClick={handlePhaseClick}
+            />
           </div>
 
           <div className="mt-6 rounded-2xl bg-slate-50 p-4">
@@ -474,7 +494,7 @@ export default function OverviewDashboard({ mode }: OverviewDashboardProps) {
         </div>
       </section>
 
-      {mode === 'admin' && (
+      {mode === 'admin' ? (
         <section className="rounded-3xl border border-slate-200 bg-white p-6">
           <div className="mb-4">
             <p className="text-sm font-medium text-slate-500">빠른 이동</p>
@@ -496,7 +516,7 @@ export default function OverviewDashboard({ mode }: OverviewDashboardProps) {
             ))}
           </div>
         </section>
-      )}
+      ) : null}
 
       <section className="rounded-3xl border border-slate-200 bg-white p-6">
         <div className="mb-4">
@@ -535,7 +555,7 @@ export default function OverviewDashboard({ mode }: OverviewDashboardProps) {
                   </div>
                   <p className="mt-4 text-2xl font-semibold text-slate-950">{value}</p>
                   <p className="mt-2 text-sm text-slate-600">{description}</p>
-                  {mode === 'admin' && href && (
+                  {mode === 'admin' && href ? (
                     <Link
                       href={href}
                       className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-blue-600 transition hover:text-blue-500"
@@ -543,7 +563,7 @@ export default function OverviewDashboard({ mode }: OverviewDashboardProps) {
                       관리 바로가기
                       <ArrowRight className="h-4 w-4" />
                     </Link>
-                  )}
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -603,7 +623,7 @@ export default function OverviewDashboard({ mode }: OverviewDashboardProps) {
                         <span>{formatCompactDate(promotion.published_date)}</span>
                       </div>
                       <h3 className="mt-2 text-base font-semibold text-slate-900">{promotion.title}</h3>
-                      <p className="mt-2 text-sm text-slate-600">도달 수: {promotion.reach_count.toLocaleString('ko-KR')}명</p>
+                      <p className="mt-2 text-sm text-slate-600">도달 수 {promotion.reach_count.toLocaleString('ko-KR')}명</p>
                     </div>
                     {promotion.url ? (
                       <a
