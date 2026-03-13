@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ADMIN_COOKIE_NAME, getAdminToken } from '@/lib/auth';
+import { ADMIN_COOKIE_NAME, isValidAdminToken } from '@/lib/auth';
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -10,9 +10,8 @@ export function proxy(request: NextRequest) {
     }
 
     const token = request.cookies.get(ADMIN_COOKIE_NAME);
-    const adminToken = getAdminToken();
 
-    if (!token || token.value !== adminToken) {
+    if (!token || !isValidAdminToken(token.value)) {
       return NextResponse.redirect(new URL('/admin/login', request.url));
     }
   }
