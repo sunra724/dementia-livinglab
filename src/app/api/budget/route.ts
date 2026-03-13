@@ -15,6 +15,7 @@ type RequestPayload = {
   field?: string;
   value?: unknown;
   changes?: Record<string, unknown>;
+  data?: Partial<BudgetItem>;
 };
 
 const budgetFields = new Set([
@@ -88,6 +89,51 @@ export async function GET() {
   }
 }
 
+export async function POST(request: NextRequest) {
+  try {
+    seedDb();
+    const payload = (await request.json()) as RequestPayload;
+    const data = payload.data ?? {};
+    const category = String(data.category ?? '').trim();
+    const itemName = String(data.item_name ?? '').trim();
+    const payee = String(data.payee ?? '').trim();
+
+    if (!category || !itemName || !payee) {
+      return NextResponse.json({ error: 'category, item_name and payee are required' }, { status: 400 });
+    }
+
+    const db = getDb();
+    const result = db
+      .prepare(
+        `
+          INSERT INTO budget_items (
+            category, item_name, planned_amount, actual_amount, payment_date,
+            payee, receipt_attached, phase, active, notes
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `
+      )
+      .run(
+        category,
+        itemName,
+        Number(data.planned_amount ?? 0),
+        Number(data.actual_amount ?? 0),
+        data.payment_date ? String(data.payment_date) : null,
+        payee,
+        data.receipt_attached ? 1 : 0,
+        data.phase === null || data.phase === undefined ? null : Number(data.phase),
+        data.active === undefined ? 1 : data.active ? 1 : 0,
+        String(data.notes ?? '').trim()
+      );
+
+    const item = db.prepare('SELECT * FROM budget_items WHERE id = ?').get(result.lastInsertRowid) as BudgetRow | undefined;
+    return NextResponse.json({ item: item ? toBudgetItem(item) : null });
+  } catch (error) {
+    console.error('POST /api/budget error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
 export async function PUT(request: NextRequest) {
   try {
     seedDb();
@@ -114,6 +160,24 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('PUT /api/budget error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    seedDb();
+    const payload = (await request.json()) as { id?: number };
+
+    if (typeof payload.id !== 'number') {
+      return NextResponse.json({ error: 'id is required' }, { status: 400 });
+    }
+
+    const db = getDb();
+    db.prepare('DELETE FROM budget_items WHERE id = ?').run(payload.id);
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('DELETE /api/budget error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

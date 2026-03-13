@@ -2,8 +2,19 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 
-const DB_DIR = path.join(process.cwd(), 'data');
-const DB_PATH = path.join(DB_DIR, 'livinglab.db');
+function resolveDbPath() {
+  const configuredPath = process.env.DATABASE_PATH?.trim();
+  if (configuredPath) {
+    return path.resolve(configuredPath);
+  }
+
+  const configuredDir = process.env.DATABASE_DIR?.trim();
+  const dbDir = configuredDir ? path.resolve(configuredDir) : path.join(process.cwd(), 'data');
+  return path.join(dbDir, 'livinglab.db');
+}
+
+const DB_PATH = resolveDbPath();
+const DB_DIR = path.dirname(DB_PATH);
 
 let db: Database.Database | null = null;
 

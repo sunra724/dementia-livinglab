@@ -1,1 +1,5 @@
-﻿export default function Page() { return <h1>admin/kpi</h1>; }
+import KpiManagement from '@/components/kpi/KpiManagement';
+
+export default function AdminKpiPage() {
+  return <KpiManagement editable />;
+}

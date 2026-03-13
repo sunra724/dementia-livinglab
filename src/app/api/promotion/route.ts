@@ -10,6 +10,7 @@ type RequestPayload = {
   field?: string;
   value?: unknown;
   changes?: Record<string, unknown>;
+  data?: Partial<PromotionRecord>;
 };
 
 const promotionFields = new Set([
@@ -75,6 +76,49 @@ export async function GET() {
   }
 }
 
+export async function POST(request: NextRequest) {
+  try {
+    seedDb();
+    const payload = (await request.json()) as RequestPayload;
+    const data = payload.data ?? {};
+    const channel = String(data.channel ?? '').trim();
+    const title = String(data.title ?? '').trim();
+    const status = String(data.status ?? '').trim();
+
+    if (!channel || !title || !status) {
+      return NextResponse.json({ error: 'channel, title and status are required' }, { status: 400 });
+    }
+
+    const db = getDb();
+    const result = db
+      .prepare(
+        `
+          INSERT INTO promotion_records (channel, title, published_date, phase, reach_count, url, status, notes)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `
+      )
+      .run(
+        channel,
+        title,
+        data.published_date ? String(data.published_date) : null,
+        data.phase === null || data.phase === undefined ? null : Number(data.phase),
+        Number(data.reach_count ?? 0),
+        String(data.url ?? '').trim(),
+        status,
+        String(data.notes ?? '').trim()
+      );
+
+    const item = db
+      .prepare('SELECT * FROM promotion_records WHERE id = ?')
+      .get(result.lastInsertRowid) as PromotionRecord | undefined;
+
+    return NextResponse.json({ item });
+  } catch (error) {
+    console.error('POST /api/promotion error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
 export async function PUT(request: NextRequest) {
   try {
     seedDb();
@@ -101,6 +145,24 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('PUT /api/promotion error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    seedDb();
+    const payload = (await request.json()) as { id?: number };
+
+    if (typeof payload.id !== 'number') {
+      return NextResponse.json({ error: 'id is required' }, { status: 400 });
+    }
+
+    const db = getDb();
+    db.prepare('DELETE FROM promotion_records WHERE id = ?').run(payload.id);
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('DELETE /api/promotion error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

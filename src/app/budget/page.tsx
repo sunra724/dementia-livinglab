@@ -1,1 +1,5 @@
-﻿export default function Page() { return <h1>budget</h1>; }
+import BudgetManagement from '@/components/budget/BudgetManagement';
+
+export default function BudgetPage() {
+  return <BudgetManagement editable={false} />;
+}

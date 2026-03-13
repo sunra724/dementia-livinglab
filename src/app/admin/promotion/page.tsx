@@ -1,1 +1,5 @@
-﻿export default function Page() { return <h1>admin/promotion</h1>; }
+import PromotionManagement from '@/components/promotion/PromotionManagement';
+
+export default function AdminPromotionPage() {
+  return <PromotionManagement editable />;
+}
