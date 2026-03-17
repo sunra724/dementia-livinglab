@@ -86,6 +86,167 @@ const { data: budgetData }    = useSWR('/api/budget');
 
 URL 있으면 링크 표시, 없으면 버튼 비활성.
 
+**섹션 H — 치매돌봄 현황 (배경 통계 + 지역 맥락)**
+
+> 이 섹션은 외부 API 불필요. 모든 데이터를 상수로 하드코딩.
+> 출처: 보건복지부·중앙치매센터 「2023년 치매역학조사 및 실태조사」 (2025.03 발표)
+
+`src/lib/dementia-stats.ts` 파일 신규 생성 후 아래 상수 정의:
+
+```typescript
+// 출처: 보건복지부·중앙치매센터 「2023년 치매역학조사 및 실태조사」 2025년 3월 발표
+export const NATIONAL_DEMENTIA_STATS = {
+  source: '보건복지부·중앙치매센터 「2023년 치매역학조사 및 실태조사」',
+  published: '2025년 3월',
+  patients_2025: 970000,          // 2025년 추정 치매환자 수 (97만 명)
+  patients_2026: 1010000,         // 2026년 100만 명 돌파 예상
+  patients_2044: 2010000,         // 2044년 200만 명 예상
+  prevalence_rate: 9.17,          // 2025년 치매 유병률 (%)
+  mci_patients_2025: 2980000,     // 경도인지장애 추정 인구 (298만 명)
+  family_burden_rate: 45.8,       // 가족 돌봄 부담 비율 (%)
+  family_care_hours: 18,          // 비동거 가족 주당 평균 돌봄시간
+  cost_per_patient: 22200000,     // 1인당 연간 관리비용 (원)
+  national_total_cost: 20.8,      // 국가 치매 관리 비용 (조 원)
+  severity_mild: 67.7,            // 경도 비율 (%)
+  severity_moderate: 29.5,        // 중등도 비율 (%)
+  severity_severe: 2.8,           // 중증 비율 (%)
+} as const;
+
+// 대구 지역 협력기관 관련 뉴스 (하드코딩 — 정기 업데이트 필요)
+export const LOCAL_CONTEXT_NEWS = [
+  {
+    id: 1,
+    institution: '수성구 치매안심센터',
+    title: '2025 치매관리사업 우수사례 공모전 보건복지부장관상 수상',
+    description: '독거 치매환자 방문 맞춤형 프로그램 "독거 치매 도망쳐, 건강수호대가 간다!" — 간호대학 동아리 연계',
+    date: '2026-01-02',
+    badge: '🏆 장관상',
+    badgeColor: 'yellow',
+  },
+  {
+    id: 2,
+    institution: '수성구 치매안심센터',
+    title: '치매환자 단기 쉼터 프로그램 "기억튼튼! 인지튼튼!" 운영',
+    description: '경증 치매 환자 대상 인지훈련·회상훈련·실버 레크리에이션 등 주 3회, 3개월 과정',
+    date: '2025-04-01',
+    badge: '📋 프로그램',
+    badgeColor: 'blue',
+  },
+] as const;
+```
+
+**섹션 H UI 구조:**
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  📊 치매돌봄, 왜 지금인가                                      │
+│  출처: 보건복지부·중앙치매센터 「2023년 치매역학조사」(2025.03) │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  [카드 1]          [카드 2]           [카드 3]               │
+│  97만 명           45.8%              2,220만 원             │
+│  2025년 치매환자   가족 돌봄 부담률    1인당 연간 관리비용     │
+│  2026년 100만 돌파  지역사회 거주 기준  국가 총 20.8조 원     │
+│                                                              │
+├──────────────────────────────────────────────────────────────┤
+│  좌측 (2/3 너비)                  우측 (1/3 너비)            │
+│  ┌─────────────────────────────┐  ┌────────────────────────┐ │
+│  │ 치매 중증도 분포 비교         │  │ 🏆 협력기관 소식       │ │
+│  │                             │  │                        │ │
+│  │  전국 평균  우리 대상자       │  │ 수성구 치매안심센터    │ │
+│  │  경도 67.7%  경도인지 33%   │  │ 보건복지부장관상 수상  │ │
+│  │  중등도 29.5% 경증  40%     │  │ 2026.01.02             │ │
+│  │  중증 2.8%   중등도 27%     │  │                        │ │
+│  │                             │  │ 수성구 치매안심센터    │ │
+│  │  [Recharts 묶음 막대 차트]   │  │ 단기 쉼터 프로그램    │ │
+│  └─────────────────────────────┘  │ 기억튼튼! 인지튼튼!   │ │
+│                                   └────────────────────────┘ │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**치매 중증도 비교 차트 구현 상세:**
+
+```typescript
+// 전국 데이터 (NATIONAL_DEMENTIA_STATS에서)
+const nationalData = [
+  { name: '경도', 전국평균: 67.7 },
+  { name: '중등도', 전국평균: 29.5 },
+  { name: '중증', 전국평균: 2.8 },
+];
+
+// 우리 대상자 실시간 집계 (subjectsData에서)
+// dementia_stage 값 매핑:
+//   'mild_cognitive' → 경도인지장애  → '경도' 그룹
+//   'mild'           → 경증          → '경도' 그룹
+//   'moderate'       → 중등도
+//   'severe'         → 중증
+
+const ourData = subjects.reduce((acc, s) => {
+  if (s.dementia_stage === 'mild_cognitive' || s.dementia_stage === 'mild')
+    acc['경도'] = (acc['경도'] || 0) + 1;
+  else if (s.dementia_stage === 'moderate')
+    acc['중등도'] = (acc['중등도'] || 0) + 1;
+  else if (s.dementia_stage === 'severe')
+    acc['중증'] = (acc['중증'] || 0) + 1;
+  return acc;
+}, {} as Record<string, number>);
+
+const total = Object.values(ourData).reduce((a, b) => a + b, 0);
+const chartData = nationalData.map(d => ({
+  name: d.name,
+  전국평균: d.전국평균,
+  우리대상자: total > 0 ? Math.round((ourData[d.name] || 0) / total * 100 * 10) / 10 : 0,
+}));
+```
+
+Recharts `BarChart` (dynamic import + ssr:false):
+- `BarChart` + `Bar` × 2 (전국평균: gray-400, 우리대상자: #46549C)
+- `Legend` + `Tooltip`
+- `XAxis dataKey="name"`, `YAxis tickFormatter={(v) => v + '%'}`
+- 차트 높이 200px
+
+**협력기관 소식 카드:**
+
+```typescript
+LOCAL_CONTEXT_NEWS.map(news => (
+  <div key={news.id} className="border rounded-lg p-3 mb-3">
+    <div className="flex items-center gap-2 mb-1">
+      <span className={`text-xs px-2 py-0.5 rounded-full
+        ${news.badgeColor === 'yellow' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'}
+      `}>{news.badge}</span>
+      <span className="text-xs text-gray-500">{news.institution}</span>
+    </div>
+    <p className="text-sm font-medium text-gray-900 mb-1">{news.title}</p>
+    <p className="text-xs text-gray-500 leading-relaxed">{news.description}</p>
+    <p className="text-xs text-gray-400 mt-1">{news.date}</p>
+  </div>
+))
+```
+
+**배경 통계 카드 3개 — 금액 포맷 헬퍼 함수:**
+
+```typescript
+// src/lib/format.ts (기존 파일에 추가 또는 신규)
+export function formatLargeNumber(n: number): string {
+  if (n >= 100000000) return (n / 100000000).toFixed(0) + '억';
+  if (n >= 10000) return (n / 10000).toFixed(0) + '만';
+  return n.toLocaleString('ko-KR');
+}
+// 970000 → "97만"
+// 22200000 → "2,220만"
+```
+
+카드 표시:
+- 97만 명 → `formatLargeNumber(970000) + ' 명'`
+- 2,220만 원 → `formatLargeNumber(22200000) + ' 원'`
+- 45.8% → `45.8 + '%'`
+
+섹션 전체 하단에 출처 표기:
+```
+출처: 보건복지부·중앙치매센터 「2023년 치매역학조사 및 실태조사」, 2025년 3월 발표
+협력기관 소식: 대구일보 (2026.01.02), 국민일보 (2024.02.13)
+```
+
 ---
 
 ## 2. `/admin/page.tsx` (관리자 메인)
@@ -113,6 +274,10 @@ URL 있으면 링크 표시, 없으면 버튼 비활성.
 ## 완료 기준
 
 - [ ] `/` 메인: PhaseTimeline + 9개 KPI + 캘린더 + 예산요약 + 최근홍보 3건
+- [ ] 섹션 H — 배경 통계 카드 3개 (97만 명 / 45.8% / 2,220만 원) 정상 표시
+- [ ] 섹션 H — 치매 중증도 묶음 막대 차트 (전국 vs 우리 대상자) 동작
+- [ ] 섹션 H — 협력기관 소식 카드 2건 표시
+- [ ] 출처 텍스트 하단 표기 확인
 - [ ] 사업 개월차 자동 계산 확인
 - [ ] `/admin` 빠른 이동 버튼, CSV 다운로드 3종
 - [ ] `npx tsc --noEmit` 에러 0개

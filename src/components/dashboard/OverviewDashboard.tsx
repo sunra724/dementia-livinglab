@@ -16,10 +16,13 @@ import {
   Users,
   Wallet,
 } from 'lucide-react';
+import DementiaSeverityChart from '@/components/dashboard/DementiaSeverityChart';
 import KpiCard from '@/components/dashboard/KpiCard';
 import ProgressBar from '@/components/dashboard/ProgressBar';
 import ActivityCalendar, { type ActivityCalendarEvent } from '@/components/timeline/ActivityCalendar';
 import PhaseTimeline from '@/components/timeline/PhaseTimeline';
+import { LOCAL_CONTEXT_NEWS, NATIONAL_DEMENTIA_STATS } from '@/lib/dementia-stats';
+import { formatLargeNumber } from '@/lib/format';
 import type {
   BudgetItem,
   ChecklistItem,
@@ -29,6 +32,7 @@ import type {
   ProgressStatus,
   PromotionChannel,
   PromotionRecord,
+  Subject,
   Workshop,
   WorksheetEntry,
 } from '@/lib/types';
@@ -46,6 +50,10 @@ interface WorkshopsResponse {
 
 interface SafetyResponse {
   gate_status: PhaseGateResult[];
+}
+
+interface ParticipantsResponse {
+  subjects: Subject[];
 }
 
 interface SummaryCard {
@@ -207,9 +215,24 @@ export default function OverviewDashboard({ mode }: OverviewDashboardProps) {
     isLoading: safetyLoading,
     mutate: mutateSafety,
   } = useSWR<SafetyResponse>('/api/safety', fetcher);
+  const {
+    data: participantsPayload,
+    error: participantsError,
+    isLoading: participantsLoading,
+    mutate: mutateParticipants,
+  } = useSWR<ParticipantsResponse>('/api/participants', fetcher);
 
-  const isLoading = kpiLoading || workshopLoading || guidebookLoading || promotionLoading || budgetLoading || safetyLoading;
-  const hasError = Boolean(kpiError || workshopError || guidebookError || promotionError || budgetError || safetyError);
+  const isLoading =
+    kpiLoading ||
+    workshopLoading ||
+    guidebookLoading ||
+    promotionLoading ||
+    budgetLoading ||
+    safetyLoading ||
+    participantsLoading;
+  const hasError = Boolean(
+    kpiError || workshopError || guidebookError || promotionError || budgetError || safetyError || participantsError
+  );
 
   if (isLoading) {
     return <DashboardLoading />;
@@ -222,7 +245,8 @@ export default function OverviewDashboard({ mode }: OverviewDashboardProps) {
     !checklistItems ||
     !promotionItems ||
     !budgetItems ||
-    !safetyData
+    !safetyData ||
+    !participantsPayload
   ) {
     return (
       <DashboardError
@@ -234,6 +258,7 @@ export default function OverviewDashboard({ mode }: OverviewDashboardProps) {
             mutatePromotion(),
             mutateBudget(),
             mutateSafety(),
+            mutateParticipants(),
           ]);
         }}
       />
@@ -241,6 +266,7 @@ export default function OverviewDashboard({ mode }: OverviewDashboardProps) {
   }
 
   const workshops = workshopPayload.workshops;
+  const subjects = participantsPayload.subjects;
   const projectMonth = calculateProjectMonth(now);
   const currentMonthWorkshops = workshops.filter((workshop) =>
     isSameYearMonth(workshop.scheduled_date, currentYear, currentMonth)
@@ -314,6 +340,67 @@ export default function OverviewDashboard({ mode }: OverviewDashboardProps) {
       return rightValue - leftValue;
     })
     .slice(0, 3);
+
+  const dementiaSeverityCounts = subjects.reduce<Record<'경도' | '중등도' | '중증', number>>(
+    (result, subject) => {
+      if (subject.dementia_stage === 'mild_cognitive' || subject.dementia_stage === 'mild') {
+        result.경도 += 1;
+        return result;
+      }
+
+      if (subject.dementia_stage === 'moderate') {
+        result.중등도 += 1;
+        return result;
+      }
+
+      if (subject.dementia_stage === 'severe') {
+        result.중증 += 1;
+      }
+
+      return result;
+    },
+    { 경도: 0, 중등도: 0, 중증: 0 }
+  );
+  const dementiaSubjectsTotal = Object.values(dementiaSeverityCounts).reduce((sum, value) => sum + value, 0);
+  const dementiaChartData = [
+    {
+      name: '경도',
+      nationalAverage: NATIONAL_DEMENTIA_STATS.severity_mild,
+      localSubjects:
+        dementiaSubjectsTotal > 0 ? Math.round((dementiaSeverityCounts.경도 / dementiaSubjectsTotal) * 1000) / 10 : 0,
+    },
+    {
+      name: '중등도',
+      nationalAverage: NATIONAL_DEMENTIA_STATS.severity_moderate,
+      localSubjects:
+        dementiaSubjectsTotal > 0
+          ? Math.round((dementiaSeverityCounts.중등도 / dementiaSubjectsTotal) * 1000) / 10
+          : 0,
+    },
+    {
+      name: '중증',
+      nationalAverage: NATIONAL_DEMENTIA_STATS.severity_severe,
+      localSubjects:
+        dementiaSubjectsTotal > 0 ? Math.round((dementiaSeverityCounts.중증 / dementiaSubjectsTotal) * 1000) / 10 : 0,
+    },
+  ];
+  const dementiaInsightCards = [
+    {
+      value: `${formatLargeNumber(NATIONAL_DEMENTIA_STATS.patients_2025)} 명`,
+      title: '2025년 치매환자 수',
+      description: '2026년 100만 명 돌파 예상',
+    },
+    {
+      value: `${NATIONAL_DEMENTIA_STATS.family_burden_rate}%`,
+      title: '가족 돌봄 부담률',
+      description: '지역사회 거주 치매가구 기준',
+    },
+    {
+      value: `${formatLargeNumber(NATIONAL_DEMENTIA_STATS.cost_per_patient)} 원`,
+      title: '1인당 연간 관리비용',
+      description: `국가 총 ${NATIONAL_DEMENTIA_STATS.national_total_cost}조 원`,
+    },
+  ] as const;
 
   const summaryCards: SummaryCard[] = [
     {
@@ -649,6 +736,90 @@ export default function OverviewDashboard({ mode }: OverviewDashboardProps) {
               ))}
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className="rounded-3xl border border-slate-200 bg-white p-6">
+        <div className="flex flex-col gap-3 border-b border-slate-200 pb-6">
+          <div>
+            <p className="text-sm font-medium text-slate-500">치매돌봄 현황</p>
+            <h2 className="mt-2 text-2xl font-semibold text-slate-950">치매돌봄, 왜 지금인가</h2>
+          </div>
+          <p className="text-sm text-slate-500">
+            출처: {NATIONAL_DEMENTIA_STATS.source}, {NATIONAL_DEMENTIA_STATS.published} 발표
+          </p>
+        </div>
+
+        <div className="mt-6 grid gap-4 md:grid-cols-3">
+          {dementiaInsightCards.map((card) => (
+            <div key={card.title} className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+              <p className="text-3xl font-semibold tracking-tight text-slate-950">{card.value}</p>
+              <p className="mt-3 text-sm font-medium text-slate-700">{card.title}</p>
+              <p className="mt-1 text-sm text-slate-500">{card.description}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,1fr)]">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-sm font-medium text-slate-500">치매 중증도 분포 비교</p>
+                <h3 className="mt-2 text-xl font-semibold text-slate-950">전국 평균과 우리 대상자 현황</h3>
+              </div>
+              <p className="text-sm text-slate-500">등록 대상자 {dementiaSubjectsTotal}명 기준</p>
+            </div>
+
+            <div className="mt-5">
+              <DementiaSeverityChart data={dementiaChartData} />
+            </div>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+              {dementiaChartData.map((item) => (
+                <div key={item.name} className="rounded-2xl bg-white p-4">
+                  <p className="text-sm font-medium text-slate-700">{item.name}</p>
+                  <p className="mt-2 text-sm text-slate-500">전국 평균 {item.nationalAverage}%</p>
+                  <p className="mt-1 text-sm text-slate-500">우리 대상자 {item.localSubjects}%</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <div className="mb-4">
+              <p className="text-sm font-medium text-slate-500">협력기관 소식</p>
+              <h3 className="mt-2 text-xl font-semibold text-slate-950">대구 지역 치매 돌봄 동향</h3>
+            </div>
+
+            <div className="space-y-3">
+              {LOCAL_CONTEXT_NEWS.map((news) => (
+                <div key={news.id} className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className={`rounded-full px-2 py-1 text-xs font-medium ${
+                        news.badgeColor === 'yellow'
+                          ? 'bg-yellow-100 text-yellow-800'
+                          : 'bg-blue-100 text-blue-800'
+                      }`}
+                    >
+                      {news.badge}
+                    </span>
+                    <span className="text-xs text-slate-500">{news.institution}</span>
+                  </div>
+                  <p className="mt-3 text-sm font-medium leading-6 text-slate-900">{news.title}</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-500">{news.description}</p>
+                  <p className="mt-3 text-xs text-slate-400">{formatCompactDate(news.date)}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 border-t border-slate-200 pt-4 text-sm text-slate-500">
+          <p>
+            출처: {NATIONAL_DEMENTIA_STATS.source}, {NATIONAL_DEMENTIA_STATS.published} 발표
+          </p>
+          <p className="mt-1">협력기관 소식: 대구일보 (2026.01.02), 수성구 치매안심센터 안내 자료 (2025.04.01)</p>
         </div>
       </section>
     </div>

@@ -11,6 +11,7 @@ import {
   NotebookTabs,
   Shield,
   ShieldCheck,
+  Sparkles,
   Users,
   Wallet,
   X,
@@ -33,7 +34,9 @@ const menuItems: MenuItem[] = [
   { href: '/promotion', label: '홍보 관리', icon: Megaphone },
   { href: '/safety', label: '안전·윤리', icon: ShieldCheck },
   { href: '/guidebook', label: '가이드북 체크리스트', icon: NotebookTabs },
+  { href: '/impact-report', label: '임팩트 보고서', icon: Sparkles },
   { href: '/admin', label: '관리자', icon: Shield, admin: true },
+  { href: '/admin/impact-report', label: '임팩트 보고서', icon: Sparkles, admin: true },
 ];
 
 function isActive(pathname: string, href: string) {
@@ -49,7 +52,7 @@ export default function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
 
   const publicItems = menuItems.filter((item) => !item.admin);
-  const adminItem = menuItems.find((item) => item.admin);
+  const adminItems = menuItems.filter((item) => item.admin);
 
   const sidebarContent = (
     <div className="flex h-full flex-col border-r border-slate-200 bg-white">
@@ -84,20 +87,25 @@ export default function Sidebar() {
           })}
         </ul>
 
-        {adminItem ? (
+        {adminItems.length ? (
           <div className="mt-6 border-t border-slate-200 pt-4">
-            <Link
-              href={adminItem.href}
-              className={`flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium transition ${
-                isActive(pathname, adminItem.href)
-                  ? 'bg-orange-50 text-orange-700'
-                  : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
-              }`}
-              onClick={() => setIsOpen(false)}
-            >
-              <adminItem.icon className="h-4 w-4" />
-              <span>{adminItem.label}</span>
-            </Link>
+            <div className="space-y-1.5">
+              {adminItems.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium transition ${
+                    isActive(pathname, item.href)
+                      ? 'bg-orange-50 text-orange-700'
+                      : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+                  }`}
+                  onClick={() => setIsOpen(false)}
+                >
+                  <item.icon className="h-4 w-4" />
+                  <span>{item.label}</span>
+                </Link>
+              ))}
+            </div>
           </div>
         ) : null}
       </nav>

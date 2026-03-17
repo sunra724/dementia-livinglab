@@ -32,11 +32,13 @@ mkdir -p src/app/kpi
 mkdir -p src/app/budget
 mkdir -p src/app/promotion
 mkdir -p src/app/guidebook
+mkdir -p src/app/impact-report
 mkdir -p src/app/admin/participants
 mkdir -p src/app/admin/workshops
 mkdir -p src/app/admin/kpi
 mkdir -p src/app/admin/budget
 mkdir -p src/app/admin/promotion
+mkdir -p src/app/admin/impact-report
 mkdir -p src/app/admin/login
 mkdir -p src/app/api/participants
 mkdir -p src/app/api/workshops
@@ -45,6 +47,8 @@ mkdir -p src/app/api/budget
 mkdir -p src/app/api/promotion
 mkdir -p src/app/api/guidebook
 mkdir -p src/app/api/export
+mkdir -p src/app/api/impact/context
+mkdir -p src/app/api/impact/generate
 
 # 컴포넌트
 mkdir -p src/components/layout
@@ -52,6 +56,7 @@ mkdir -p src/components/dashboard
 mkdir -p src/components/timeline
 mkdir -p src/components/guidebook
 mkdir -p src/components/forms
+mkdir -p src/components/impact
 
 # 라이브러리
 mkdir -p src/lib
