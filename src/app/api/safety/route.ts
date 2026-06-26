@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { dbQuery, dbQueryOne } from '@/lib/db';
 import { seedDb } from '@/lib/seed';
 import { calculatePhaseGateResults } from '@/lib/safety';
 import type {
@@ -76,18 +76,15 @@ function isSafetySeverity(value: string): value is SafetySeverity {
 
 export async function GET() {
   try {
-    seedDb();
-    const db = getDb();
+    await seedDb();
 
-    const logRows = db
-      .prepare('SELECT * FROM safety_logs ORDER BY created_at DESC, id DESC')
-      .all() as SafetyLogRow[];
-    const safetyChecklistRows = db
-      .prepare("SELECT * FROM checklist_items WHERE category = 'safety' ORDER BY phase ASC, id ASC")
-      .all() as ChecklistRow[];
-    const photoRows = db
-      .prepare('SELECT * FROM field_photos ORDER BY created_at DESC, id DESC')
-      .all() as FieldPhotoRow[];
+    const logRows = await dbQuery<SafetyLogRow>('SELECT * FROM safety_logs ORDER BY created_at DESC, id DESC');
+    const safetyChecklistRows = await dbQuery<ChecklistRow>(
+      "SELECT * FROM checklist_items WHERE category = 'safety' ORDER BY phase ASC, id ASC"
+    );
+    const photoRows = await dbQuery<FieldPhotoRow>(
+      'SELECT * FROM field_photos ORDER BY created_at DESC, id DESC'
+    );
 
     const checklistSafety = safetyChecklistRows.map(toChecklistItem);
 
@@ -105,7 +102,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    seedDb();
+    await seedDb();
     const payload = (await request.json()) as CreateSafetyLogPayload;
     const phase = Number(payload.phase);
     const description = String(payload.description ?? '').trim();
@@ -128,21 +125,16 @@ export async function POST(request: NextRequest) {
         ? payload.workshop_id
         : null;
 
-    const db = getDb();
-    const result = db
-      .prepare(
-        `
+    const row = await dbQueryOne<SafetyLogRow>(
+      `
           INSERT INTO safety_logs (
             phase, workshop_id, log_type, description, recorder, severity, resolved, resolved_note, created_at
           )
           VALUES (?, ?, ?, ?, ?, ?, 0, '', ?)
-        `
-      )
-      .run(phase, workshopId, logType, description, recorder, severity, new Date().toISOString());
-
-    const row = db
-      .prepare('SELECT * FROM safety_logs WHERE id = ? LIMIT 1')
-      .get(result.lastInsertRowid) as SafetyLogRow | undefined;
+          RETURNING *
+        `,
+      [phase, workshopId, logType, description, recorder, severity, new Date().toISOString()]
+    );
 
     return NextResponse.json({ log: row ? toSafetyLog(row) : null });
   } catch (error) {
@@ -153,7 +145,7 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    seedDb();
+    await seedDb();
     const payload = (await request.json()) as ResolveSafetyLogPayload;
     const resolvedNote = String(payload.resolved_note ?? '').trim();
 
@@ -161,15 +153,15 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid safety log resolution payload' }, { status: 400 });
     }
 
-    const db = getDb();
-    db.prepare(
+    await dbQuery(
       `
         UPDATE safety_logs
         SET resolved = 1,
             resolved_note = ?
         WHERE id = ?
-      `
-    ).run(resolvedNote, payload.id);
+      `,
+      [resolvedNote, payload.id]
+    );
 
     return NextResponse.json({ success: true });
   } catch (error) {

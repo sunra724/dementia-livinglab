@@ -14,14 +14,16 @@ The app includes:
 - Public dashboards for participants, workshops, worksheets, KPI, budget, promotion, safety, and guidebook progress
 - Admin pages for operational updates
 - Public worksheet submission links with token-based access
-- SQLite-backed data storage with `better-sqlite3`
+- Postgres-backed data storage for Vercel deployments
+- Vercel Blob-backed field photo uploads
 
 ## Stack
 
 - Next.js App Router
 - TypeScript
 - Tailwind CSS
-- SQLite via `better-sqlite3`
+- Postgres via `postgres`
+- Vercel Blob via `@vercel/blob`
 - SWR
 - Recharts
 
@@ -53,24 +55,30 @@ Required:
 
 ```bash
 ADMIN_TOKEN=livinglab2026
+POSTGRES_URL=postgres://...
 ```
 
-Optional database configuration:
+Optional:
 
 ```bash
-DATABASE_PATH=./data/livinglab.db
-DATABASE_DIR=./data
+DATABASE_URL=postgres://...      # used when POSTGRES_URL is not set
+BLOB_READ_WRITE_TOKEN=vercel_blob_rw_...
+ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-Priority:
+Database priority:
 
-- `DATABASE_PATH` takes precedence
-- if `DATABASE_PATH` is not set, `DATABASE_DIR` is used
-- if neither is set, the app uses `./data/livinglab.db`
+- `POSTGRES_URL` takes precedence
+- `DATABASE_URL` is used as a fallback
+
+Photo upload behavior:
+
+- When `BLOB_READ_WRITE_TOKEN` is set, photos are stored in Vercel Blob
+- Without that token, local development stores photos under `public/uploads/photos`
 
 ## Seed Data
 
-The app auto-creates tables and seed data on first access through the API layer.
+The app auto-creates Postgres tables and seed data on first access through the API layer.
 
 Manual seed command:
 
@@ -78,26 +86,35 @@ Manual seed command:
 npm run db:seed
 ```
 
-## Railway Deployment
-
-For Railway, use a persistent volume for SQLite and point the database to that mounted path.
+## Vercel Deployment
 
 Recommended setup:
 
-1. Create a Railway volume and mount it at `/data`
-2. Add environment variables:
+1. Import this GitHub repository into Vercel
+2. Add a Vercel Marketplace Postgres provider, or connect any external Postgres database
+3. Add Vercel Blob if field photo uploads should persist
+4. Add environment variables:
 
 ```bash
 ADMIN_TOKEN=your-secure-admin-token
-DATABASE_PATH=/data/livinglab.db
+POSTGRES_URL=postgres://...
+BLOB_READ_WRITE_TOKEN=vercel_blob_rw_...
+ANTHROPIC_API_KEY=sk-ant-... # only required for impact report generation
 ```
 
-3. Deploy from GitHub or trigger a manual Railway deployment
+5. Deploy
+
+Build settings:
+
+- Framework Preset: Next.js
+- Install Command: `npm install`
+- Build Command: `npm run build`
 
 Notes:
 
-- Without a mounted volume, SQLite data will live on ephemeral container storage
-- The project builds with `npm run build` and serves with `npm run start`
+- Vercel does not provide a persistent writable project filesystem for serverless functions
+- Do not use local SQLite or `public/uploads` for production persistence on Vercel
+- The first API request initializes the schema and inserts demo seed data if the database is empty
 
 ## Main Routes
 

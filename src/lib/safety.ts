@@ -91,5 +91,9 @@ export function getBlockingGateForPhase(
 }
 
 export function getPhotoUrl(photo: Pick<FieldPhoto, 'filename'>) {
+  if (photo.filename.startsWith('https://') || photo.filename.startsWith('http://') || photo.filename.startsWith('/')) {
+    return photo.filename;
+  }
+
   return `/uploads/photos/${photo.filename}`;
 }

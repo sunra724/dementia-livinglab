@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { dbQuery, dbQueryOne, updateById, type DbValue } from '@/lib/db';
 import { seedDb } from '@/lib/seed';
 import type { LivingLabPhase, ProgressStatus, PromotionChannel, PromotionRecord } from '@/lib/types';
 
@@ -24,7 +24,7 @@ const promotionFields = new Set([
   'notes',
 ]);
 
-function normalizePromotionValue(field: string, value: unknown) {
+function normalizePromotionValue(field: string, value: unknown): DbValue {
   if (field === 'channel') {
     return String(value) as PromotionChannel;
   }
@@ -51,7 +51,7 @@ function normalizePromotionValue(field: string, value: unknown) {
 function buildChanges(payload: RequestPayload) {
   const changes = payload.changes ?? (payload.field ? { [payload.field]: payload.value } : {});
 
-  return Object.entries(changes).reduce<Record<string, unknown>>((result, [field, value]) => {
+  return Object.entries(changes).reduce<Record<string, DbValue>>((result, [field, value]) => {
     if (!promotionFields.has(field)) {
       return result;
     }
@@ -63,11 +63,10 @@ function buildChanges(payload: RequestPayload) {
 
 export async function GET() {
   try {
-    seedDb();
-    const db = getDb();
-    const items = db
-      .prepare('SELECT * FROM promotion_records ORDER BY published_date DESC, id DESC')
-      .all() as PromotionRecord[];
+    await seedDb();
+    const items = await dbQuery<PromotionRecord>(
+      'SELECT * FROM promotion_records ORDER BY published_date DESC, id DESC'
+    );
 
     return NextResponse.json(items);
   } catch (error) {
@@ -78,7 +77,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    seedDb();
+    await seedDb();
     const payload = (await request.json()) as RequestPayload;
     const data = payload.data ?? {};
     const channel = String(data.channel ?? '').trim();
@@ -89,15 +88,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'channel, title and status are required' }, { status: 400 });
     }
 
-    const db = getDb();
-    const result = db
-      .prepare(
-        `
+    const item = await dbQueryOne<PromotionRecord>(
+      `
           INSERT INTO promotion_records (channel, title, published_date, phase, reach_count, url, status, notes)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `
-      )
-      .run(
+          RETURNING *
+        `,
+      [
         channel,
         title,
         data.published_date ? String(data.published_date) : null,
@@ -106,11 +103,8 @@ export async function POST(request: NextRequest) {
         String(data.url ?? '').trim(),
         status,
         String(data.notes ?? '').trim()
-      );
-
-    const item = db
-      .prepare('SELECT * FROM promotion_records WHERE id = ?')
-      .get(result.lastInsertRowid) as PromotionRecord | undefined;
+      ]
+    );
 
     return NextResponse.json({ item });
   } catch (error) {
@@ -121,7 +115,7 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    seedDb();
+    await seedDb();
     const payload = (await request.json()) as RequestPayload;
 
     if (typeof payload.id !== 'number') {
@@ -135,12 +129,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'No valid promotion fields provided' }, { status: 400 });
     }
 
-    const db = getDb();
-    const setClause = entries.map(([field]) => `${field} = ?`).join(', ');
-    db.prepare(`UPDATE promotion_records SET ${setClause} WHERE id = ?`).run(
-      ...entries.map(([, value]) => value),
-      payload.id
-    );
+    await updateById('promotion_records', payload.id, changes);
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -151,15 +140,14 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    seedDb();
+    await seedDb();
     const payload = (await request.json()) as { id?: number };
 
     if (typeof payload.id !== 'number') {
       return NextResponse.json({ error: 'id is required' }, { status: 400 });
     }
 
-    const db = getDb();
-    db.prepare('DELETE FROM promotion_records WHERE id = ?').run(payload.id);
+    await dbQuery('DELETE FROM promotion_records WHERE id = ?', [payload.id]);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('DELETE /api/promotion error:', error);

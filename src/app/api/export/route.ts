@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { dbQuery } from '@/lib/db';
 import { seedDb } from '@/lib/seed';
 
 export const runtime = 'nodejs';
@@ -20,12 +20,11 @@ function toCsv(headers: string[], rows: Array<Record<string, unknown>>) {
 
 export async function GET(request: NextRequest) {
   try {
-    seedDb();
+    await seedDb();
     const type = request.nextUrl.searchParams.get('type');
-    const db = getDb();
 
     if (type === 'kpi') {
-      const rows = db.prepare('SELECT * FROM kpi_items ORDER BY id ASC').all() as Array<Record<string, unknown>>;
+      const rows = await dbQuery<Record<string, unknown>>('SELECT * FROM kpi_items ORDER BY id ASC');
       const headers = ['id', 'category', 'indicator', 'target', 'current', 'unit', 'trend', 'phase_related', 'notes'];
       const csv = toCsv(headers, rows);
 
@@ -38,7 +37,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (type === 'budget') {
-      const rows = db.prepare('SELECT * FROM budget_items ORDER BY id ASC').all() as Array<Record<string, unknown>>;
+      const rows = await dbQuery<Record<string, unknown>>('SELECT * FROM budget_items ORDER BY id ASC');
       const headers = [
         'id',
         'category',
@@ -63,9 +62,9 @@ export async function GET(request: NextRequest) {
     }
 
     if (type === 'participants') {
-      const participantRows = db.prepare('SELECT * FROM participants ORDER BY id ASC').all() as Array<Record<string, unknown>>;
-      const institutionRows = db.prepare('SELECT * FROM institutions ORDER BY id ASC').all() as Array<Record<string, unknown>>;
-      const subjectRows = db.prepare('SELECT * FROM subjects ORDER BY id ASC').all() as Array<Record<string, unknown>>;
+      const participantRows = await dbQuery<Record<string, unknown>>('SELECT * FROM participants ORDER BY id ASC');
+      const institutionRows = await dbQuery<Record<string, unknown>>('SELECT * FROM institutions ORDER BY id ASC');
+      const subjectRows = await dbQuery<Record<string, unknown>>('SELECT * FROM subjects ORDER BY id ASC');
 
       const rows = [
         ...participantRows.map((row) => ({ record_type: 'participant', ...row })),

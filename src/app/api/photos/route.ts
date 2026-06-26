@@ -1,8 +1,9 @@
 import crypto from 'node:crypto';
 import { mkdir, unlink, writeFile } from 'node:fs/promises';
 import { join, extname } from 'node:path';
+import { del, put } from '@vercel/blob';
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { dbQuery, dbQueryOne } from '@/lib/db';
 import { seedDb } from '@/lib/seed';
 import type { FieldPhoto, LivingLabPhase } from '@/lib/types';
 
@@ -45,6 +46,42 @@ function parseNullableString(value: FormDataEntryValue | null) {
   return value.trim();
 }
 
+function hasBlobStorage() {
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN?.trim());
+}
+
+function isRemotePhoto(filename: string) {
+  return filename.startsWith('https://') || filename.startsWith('http://');
+}
+
+async function savePhotoFile(file: File, filename: string) {
+  if (hasBlobStorage()) {
+    const blob = await put(`photos/${filename}`, file, {
+      access: 'public',
+      addRandomSuffix: false,
+    });
+
+    return blob.url;
+  }
+
+  const uploadDir = join(process.cwd(), 'public', 'uploads', 'photos');
+  await mkdir(uploadDir, { recursive: true });
+  const buffer = Buffer.from(await file.arrayBuffer());
+  await writeFile(join(uploadDir, filename), buffer);
+  return filename;
+}
+
+async function deletePhotoFile(filename: string) {
+  if (isRemotePhoto(filename)) {
+    if (hasBlobStorage()) {
+      await del(filename).catch(() => undefined);
+    }
+    return;
+  }
+
+  await unlink(join(process.cwd(), 'public', 'uploads', 'photos', filename)).catch(() => undefined);
+}
+
 async function resolvePhotoPhase(
   phase: number | null,
   workshopId: number | null,
@@ -54,12 +91,11 @@ async function resolvePhotoPhase(
     return phase as LivingLabPhase;
   }
 
-  const db = getDb();
-
   if (workshopId) {
-    const row = db
-      .prepare('SELECT phase FROM workshops WHERE id = ? LIMIT 1')
-      .get(workshopId) as { phase: number } | undefined;
+    const row = await dbQueryOne<{ phase: number }>(
+      'SELECT phase FROM workshops WHERE id = ? LIMIT 1',
+      [workshopId]
+    );
 
     if (row && row.phase >= 1 && row.phase <= 6) {
       return row.phase as LivingLabPhase;
@@ -67,17 +103,16 @@ async function resolvePhotoPhase(
   }
 
   if (worksheetId) {
-    const row = db
-      .prepare(
-        `
+    const row = await dbQueryOne<{ phase: number }>(
+      `
           SELECT workshops.phase
           FROM worksheet_entries
           JOIN workshops ON workshops.id = worksheet_entries.workshop_id
           WHERE worksheet_entries.id = ?
           LIMIT 1
-        `
-      )
-      .get(worksheetId) as { phase: number } | undefined;
+        `,
+      [worksheetId]
+    );
 
     if (row && row.phase >= 1 && row.phase <= 6) {
       return row.phase as LivingLabPhase;
@@ -89,8 +124,7 @@ async function resolvePhotoPhase(
 
 export async function GET(request: NextRequest) {
   try {
-    seedDb();
-    const db = getDb();
+    await seedDb();
     const { searchParams } = new URL(request.url);
     const workshopId = searchParams.get('workshop_id');
     const worksheetId = searchParams.get('worksheet_id');
@@ -115,9 +149,10 @@ export async function GET(request: NextRequest) {
     }
 
     const whereClause = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
-    const rows = db
-      .prepare(`SELECT * FROM field_photos ${whereClause} ORDER BY created_at DESC, id DESC`)
-      .all(...values) as FieldPhotoRow[];
+    const rows = await dbQuery<FieldPhotoRow>(
+      `SELECT * FROM field_photos ${whereClause} ORDER BY created_at DESC, id DESC`,
+      values
+    );
 
     return NextResponse.json({ photos: rows.map(toFieldPhoto) });
   } catch (error) {
@@ -128,8 +163,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    seedDb();
-    const db = getDb();
+    await seedDb();
     const formData = await request.formData();
     const file = formData.get('file');
 
@@ -150,46 +184,38 @@ export async function POST(request: NextRequest) {
     const consentVerified = String(formData.get('consent_verified') ?? '') === 'true';
     const resolvedPhase = await resolvePhotoPhase(phase, workshopId, worksheetId);
 
-    const uploadDir = join(process.cwd(), 'public', 'uploads', 'photos');
-    await mkdir(uploadDir, { recursive: true });
-
     const extension = extname(file.name) || '.jpg';
     const filename = `${crypto.randomUUID()}${extension}`;
-    const buffer = Buffer.from(await file.arrayBuffer());
-    await writeFile(join(uploadDir, filename), buffer);
+    const storedFilename = await savePhotoFile(file, filename);
 
     const createdAt = new Date().toISOString();
     const takenAt = takenAtRaw || null;
-    const result = db
-      .prepare(
-        `
+    const row = await dbQueryOne<FieldPhotoRow>(
+      `
           INSERT INTO field_photos (
             workshop_id, worksheet_id, phase, filename, original_name,
             description, taken_by, taken_at, consent_verified, created_at
           )
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `
-      )
-      .run(
+          RETURNING *
+        `,
+      [
         workshopId,
         worksheetId,
         resolvedPhase,
-        filename,
+        storedFilename,
         file.name,
         description,
         takenBy,
         takenAt,
         consentVerified ? 1 : 0,
         createdAt
-      );
-
-    const row = db
-      .prepare('SELECT * FROM field_photos WHERE id = ? LIMIT 1')
-      .get(result.lastInsertRowid) as FieldPhotoRow | undefined;
+      ]
+    );
 
     return NextResponse.json({
       photo: row ? toFieldPhoto(row) : null,
-      url: `/uploads/photos/${filename}`,
+      url: storedFilename,
     });
   } catch (error) {
     console.error('POST /api/photos error:', error);
@@ -199,18 +225,17 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    seedDb();
+    await seedDb();
     const payload = (await request.json()) as UpdatePhotoPayload;
 
     if (typeof payload.id !== 'number') {
       return NextResponse.json({ error: 'id is required' }, { status: 400 });
     }
 
-    const db = getDb();
-    db.prepare('UPDATE field_photos SET consent_verified = ? WHERE id = ?').run(
+    await dbQuery('UPDATE field_photos SET consent_verified = ? WHERE id = ?', [
       payload.consent_verified ? 1 : 0,
-      payload.id
-    );
+      payload.id,
+    ]);
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -221,24 +246,24 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    seedDb();
+    await seedDb();
     const payload = (await request.json()) as DeletePhotoPayload;
 
     if (typeof payload.id !== 'number') {
       return NextResponse.json({ error: 'id is required' }, { status: 400 });
     }
 
-    const db = getDb();
-    const row = db
-      .prepare('SELECT filename FROM field_photos WHERE id = ? LIMIT 1')
-      .get(payload.id) as { filename: string } | undefined;
+    const row = await dbQueryOne<{ filename: string }>(
+      'SELECT filename FROM field_photos WHERE id = ? LIMIT 1',
+      [payload.id]
+    );
 
     if (!row) {
       return NextResponse.json({ error: 'Photo not found' }, { status: 404 });
     }
 
-    db.prepare('DELETE FROM field_photos WHERE id = ?').run(payload.id);
-    await unlink(join(process.cwd(), 'public', 'uploads', 'photos', row.filename)).catch(() => undefined);
+    await dbQuery('DELETE FROM field_photos WHERE id = ?', [payload.id]);
+    await deletePhotoFile(row.filename);
 
     return NextResponse.json({ success: true });
   } catch (error) {

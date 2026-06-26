@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { dbQuery, dbQueryOne } from '@/lib/db';
 import { seedDb } from '@/lib/seed';
 import type {
   ImpactBudgetStats,
@@ -24,157 +24,112 @@ function toNumber(value: unknown) {
 
 export async function GET() {
   try {
-    seedDb();
-    const db = getDb();
+    await seedDb();
 
-    const participantRow = db
-      .prepare(
-        `
-          SELECT
-            COUNT(*) as total,
-            SUM(CASE WHEN role='activist' AND active=1 THEN 1 ELSE 0 END) as activist_count,
-            SUM(CASE WHEN role='facilitator' AND active=1 THEN 1 ELSE 0 END) as facilitator_count,
-            SUM(CASE WHEN role='expert' AND active=1 THEN 1 ELSE 0 END) as expert_count,
-            SUM(CASE WHEN role='institution_staff' AND active=1 THEN 1 ELSE 0 END) as staff_count
-          FROM participants
-        `
-      )
-      .get() as Record<string, unknown>;
+    const participantRow = await dbQueryOne<Record<string, unknown>>(`
+      SELECT
+        COUNT(*) as total,
+        SUM(CASE WHEN role='activist' AND active=1 THEN 1 ELSE 0 END) as activist_count,
+        SUM(CASE WHEN role='facilitator' AND active=1 THEN 1 ELSE 0 END) as facilitator_count,
+        SUM(CASE WHEN role='expert' AND active=1 THEN 1 ELSE 0 END) as expert_count,
+        SUM(CASE WHEN role='institution_staff' AND active=1 THEN 1 ELSE 0 END) as staff_count
+      FROM participants
+    `);
 
-    const subjectRow = db
-      .prepare(
-        `
-          SELECT
-            COUNT(*) as total,
-            SUM(CASE WHEN type='elder' AND dropout=0 THEN 1 ELSE 0 END) as elder_count,
-            SUM(CASE WHEN type='family_caregiver' AND dropout=0 THEN 1 ELSE 0 END) as family_count,
-            SUM(CASE WHEN consent_signed=1 THEN 1 ELSE 0 END) as consent_count
-          FROM subjects
-        `
-      )
-      .get() as Record<string, unknown>;
+    const subjectRow = await dbQueryOne<Record<string, unknown>>(`
+      SELECT
+        COUNT(*) as total,
+        SUM(CASE WHEN type='elder' AND dropout=0 THEN 1 ELSE 0 END) as elder_count,
+        SUM(CASE WHEN type='family_caregiver' AND dropout=0 THEN 1 ELSE 0 END) as family_count,
+        SUM(CASE WHEN consent_signed=1 THEN 1 ELSE 0 END) as consent_count
+      FROM subjects
+    `);
 
-    const institutionRow = db
-      .prepare(
-        `
-          SELECT
-            COUNT(*) as total,
-            SUM(CASE WHEN mou_signed=1 THEN 1 ELSE 0 END) as mou_count
-          FROM institutions
-        `
-      )
-      .get() as Record<string, unknown>;
+    const institutionRow = await dbQueryOne<Record<string, unknown>>(`
+      SELECT
+        COUNT(*) as total,
+        SUM(CASE WHEN mou_signed=1 THEN 1 ELSE 0 END) as mou_count
+      FROM institutions
+    `);
 
-    const workshops = db
-      .prepare(
-        `
-          SELECT id, title, phase, scheduled_date, actual_date, status, participants_count, outcome_summary
-          FROM workshops
-          ORDER BY phase ASC, id ASC
-        `
-      )
-      .all() as Array<Record<string, unknown>>;
+    const workshops = await dbQuery<Record<string, unknown>>(`
+      SELECT id, title, phase, scheduled_date, actual_date, status, participants_count, outcome_summary
+      FROM workshops
+      ORDER BY phase ASC, id ASC
+    `);
 
-    const worksheetRows = db
-      .prepare(
-        `
-          SELECT
-            template_key,
-            COUNT(*) as total,
-            SUM(CASE WHEN reviewed=1 THEN 1 ELSE 0 END) as reviewed_count
-          FROM worksheet_entries
-          WHERE submitted_at IS NOT NULL
-          GROUP BY template_key
-          ORDER BY template_key ASC
-        `
-      )
-      .all() as Array<Record<string, unknown>>;
+    const worksheetRows = await dbQuery<Record<string, unknown>>(`
+      SELECT
+        template_key,
+        COUNT(*) as total,
+        SUM(CASE WHEN reviewed=1 THEN 1 ELSE 0 END) as reviewed_count
+      FROM worksheet_entries
+      WHERE submitted_at IS NOT NULL
+      GROUP BY template_key
+      ORDER BY template_key ASC
+    `);
 
-    const kpis = db
-      .prepare(
-        `
-          SELECT id, category, indicator, target, current, unit, notes
-          FROM kpi_items
-          ORDER BY id ASC
-        `
-      )
-      .all() as ImpactKpiSummary[];
+    const kpis = await dbQuery<ImpactKpiSummary>(`
+      SELECT id, category, indicator, target, current, unit, notes
+      FROM kpi_items
+      ORDER BY id ASC
+    `);
 
-    const budgetRow = db
-      .prepare(
-        `
-          SELECT
-            SUM(planned_amount) as total_planned,
-            SUM(actual_amount) as total_actual
-          FROM budget_items
-          WHERE active=1
-        `
-      )
-      .get() as Record<string, unknown>;
+    const budgetRow = await dbQueryOne<Record<string, unknown>>(`
+      SELECT
+        SUM(planned_amount) as total_planned,
+        SUM(actual_amount) as total_actual
+      FROM budget_items
+      WHERE active=1
+    `);
 
-    const promotionRow = db
-      .prepare(
-        `
-          SELECT
-            COUNT(*) as total,
-            SUM(reach_count) as total_reach,
-            SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) as completed_count
-          FROM promotion_records
-        `
-      )
-      .get() as Record<string, unknown>;
+    const promotionRow = await dbQueryOne<Record<string, unknown>>(`
+      SELECT
+        COUNT(*) as total,
+        SUM(reach_count) as total_reach,
+        SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) as completed_count
+      FROM promotion_records
+    `);
 
-    const checklistRows = db
-      .prepare(
-        `
-          SELECT
-            phase,
-            COUNT(*) as total,
-            SUM(completed) as done,
-            SUM(CASE WHEN required=1 THEN 1 ELSE 0 END) as required_total,
-            SUM(CASE WHEN required=1 AND completed=1 THEN 1 ELSE 0 END) as required_done
-          FROM checklist_items
-          GROUP BY phase
-          ORDER BY phase ASC
-        `
-      )
-      .all() as Array<Record<string, unknown>>;
+    const checklistRows = await dbQuery<Record<string, unknown>>(`
+      SELECT
+        phase,
+        COUNT(*) as total,
+        SUM(completed) as done,
+        SUM(CASE WHEN required=1 THEN 1 ELSE 0 END) as required_total,
+        SUM(CASE WHEN required=1 AND completed=1 THEN 1 ELSE 0 END) as required_done
+      FROM checklist_items
+      GROUP BY phase
+      ORDER BY phase ASC
+    `);
 
-    let safetyRow: Record<string, unknown> = { total: 0, critical: 0, resolved: 0 };
-    try {
-      safetyRow = db
-        .prepare(
-          `
-            SELECT
-              COUNT(*) as total,
-              SUM(CASE WHEN severity='critical' THEN 1 ELSE 0 END) as critical,
-              SUM(CASE WHEN resolved=1 THEN 1 ELSE 0 END) as resolved
-            FROM safety_logs
-          `
-        )
-        .get() as Record<string, unknown>;
-    } catch {
-      safetyRow = { total: 0, critical: 0, resolved: 0 };
-    }
+    const safetyRow =
+      (await dbQueryOne<Record<string, unknown>>(`
+        SELECT
+          COUNT(*) as total,
+          SUM(CASE WHEN severity='critical' THEN 1 ELSE 0 END) as critical,
+          SUM(CASE WHEN resolved=1 THEN 1 ELSE 0 END) as resolved
+        FROM safety_logs
+      `)) ?? { total: 0, critical: 0, resolved: 0 };
 
     const participantStats: ImpactParticipantStats = {
-      total: toNumber(participantRow.total),
-      activist_count: toNumber(participantRow.activist_count),
-      facilitator_count: toNumber(participantRow.facilitator_count),
-      expert_count: toNumber(participantRow.expert_count),
-      staff_count: toNumber(participantRow.staff_count),
+      total: toNumber(participantRow?.total),
+      activist_count: toNumber(participantRow?.activist_count),
+      facilitator_count: toNumber(participantRow?.facilitator_count),
+      expert_count: toNumber(participantRow?.expert_count),
+      staff_count: toNumber(participantRow?.staff_count),
     };
 
     const subjectStats: ImpactSubjectStats = {
-      total: toNumber(subjectRow.total),
-      elder_count: toNumber(subjectRow.elder_count),
-      family_count: toNumber(subjectRow.family_count),
-      consent_count: toNumber(subjectRow.consent_count),
+      total: toNumber(subjectRow?.total),
+      elder_count: toNumber(subjectRow?.elder_count),
+      family_count: toNumber(subjectRow?.family_count),
+      consent_count: toNumber(subjectRow?.consent_count),
     };
 
     const institutionStats: ImpactInstitutionStats = {
-      total: toNumber(institutionRow.total),
-      mou_count: toNumber(institutionRow.mou_count),
+      total: toNumber(institutionRow?.total),
+      mou_count: toNumber(institutionRow?.mou_count),
     };
 
     const workshopStats: ImpactWorkshopStats = {
@@ -196,14 +151,14 @@ export async function GET() {
     );
 
     const budgetStats: ImpactBudgetStats = {
-      total_planned: toNumber(budgetRow.total_planned),
-      total_actual: toNumber(budgetRow.total_actual),
+      total_planned: toNumber(budgetRow?.total_planned),
+      total_actual: toNumber(budgetRow?.total_actual),
     };
 
     const promotionStats: ImpactPromotionStats = {
-      total: toNumber(promotionRow.total),
-      total_reach: toNumber(promotionRow.total_reach),
-      completed_count: toNumber(promotionRow.completed_count),
+      total: toNumber(promotionRow?.total),
+      total_reach: toNumber(promotionRow?.total_reach),
+      completed_count: toNumber(promotionRow?.completed_count),
     };
 
     const checklistByPhase: ImpactChecklistPhaseStat[] = checklistRows.map((row) => ({
@@ -226,7 +181,7 @@ export async function GET() {
     }, 1 as LivingLabPhase);
 
     const response: ImpactContextResponse = {
-      projectName: '2026년 치매돌봄 리빙랩 통합 성과관리 시스템',
+      projectName: '2026년 치매돌봄 리빙랩 통합 성과관리 대시보드',
       organization: '협동조합 소이랩',
       period: '2026년 3월 ~ 2026년 11월',
       currentPhase,

@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { dbQuery, dbQueryOne } from '@/lib/db';
 import { seedDb } from '@/lib/seed';
 import type {
   WorksheetContributorRole,
@@ -67,18 +67,17 @@ function isTokenExpired(expiresAt: string | null) {
   return expiresAt ? new Date(expiresAt).getTime() < Date.now() : false;
 }
 
-function getTokenByValue(token: string) {
-  const db = getDb();
-  return db
-    .prepare('SELECT * FROM worksheet_tokens WHERE token = ? LIMIT 1')
-    .get(token) as WorksheetTokenRow | undefined;
+async function getTokenByValue(token: string) {
+  return dbQueryOne<WorksheetTokenRow>('SELECT * FROM worksheet_tokens WHERE token = ? LIMIT 1', [
+    token,
+  ]);
 }
 
-function getEntryByTokenId(tokenId: number) {
-  const db = getDb();
-  const row = db
-    .prepare('SELECT * FROM worksheet_entries WHERE token_id = ? LIMIT 1')
-    .get(tokenId) as WorksheetEntryRow | undefined;
+async function getEntryByTokenId(tokenId: number) {
+  const row = await dbQueryOne<WorksheetEntryRow>(
+    'SELECT * FROM worksheet_entries WHERE token_id = ? LIMIT 1',
+    [tokenId]
+  );
 
   return row ? toWorksheetEntry(row) : null;
 }
@@ -132,14 +131,13 @@ function validateTemplateKey(value: unknown): value is WorksheetTemplateKey {
 
 export async function GET(request: NextRequest) {
   try {
-    seedDb();
-    const db = getDb();
+    await seedDb();
     const { searchParams } = new URL(request.url);
     const token = searchParams.get('token');
     const workshopId = searchParams.get('workshop_id');
 
     if (token) {
-      const tokenRow = getTokenByValue(token);
+      const tokenRow = await getTokenByValue(token);
       if (!tokenRow || !tokenRow.active || isTokenExpired(tokenRow.expires_at)) {
         return NextResponse.json({
           valid: false,
@@ -149,33 +147,32 @@ export async function GET(request: NextRequest) {
         });
       }
 
-      const workshop = db
-        .prepare('SELECT id, title, phase, scheduled_date FROM workshops WHERE id = ? LIMIT 1')
-        .get(tokenRow.workshop_id) as WorkshopSummary | undefined;
+      const workshop = await dbQueryOne<WorkshopSummary>(
+        'SELECT id, title, phase, scheduled_date FROM workshops WHERE id = ? LIMIT 1',
+        [tokenRow.workshop_id]
+      );
 
       return NextResponse.json({
         valid: Boolean(workshop),
         workshop: workshop ?? null,
         template_key: tokenRow.template_key,
-        existing_entry: getEntryByTokenId(tokenRow.id),
+        existing_entry: await getEntryByTokenId(tokenRow.id),
       });
     }
 
     const entryRows = workshopId
-      ? (db
-          .prepare('SELECT * FROM worksheet_entries WHERE workshop_id = ? ORDER BY submitted_at DESC, id DESC')
-          .all(Number(workshopId)) as WorksheetEntryRow[])
-      : (db
-          .prepare('SELECT * FROM worksheet_entries ORDER BY submitted_at DESC, id DESC')
-          .all() as WorksheetEntryRow[]);
+      ? await dbQuery<WorksheetEntryRow>(
+          'SELECT * FROM worksheet_entries WHERE workshop_id = ? ORDER BY submitted_at DESC, id DESC',
+          [Number(workshopId)]
+        )
+      : await dbQuery<WorksheetEntryRow>('SELECT * FROM worksheet_entries ORDER BY submitted_at DESC, id DESC');
 
     const tokenRows = workshopId
-      ? (db
-          .prepare('SELECT * FROM worksheet_tokens WHERE workshop_id = ? ORDER BY created_at DESC, id DESC')
-          .all(Number(workshopId)) as WorksheetTokenRow[])
-      : (db
-          .prepare('SELECT * FROM worksheet_tokens ORDER BY created_at DESC, id DESC')
-          .all() as WorksheetTokenRow[]);
+      ? await dbQuery<WorksheetTokenRow>(
+          'SELECT * FROM worksheet_tokens WHERE workshop_id = ? ORDER BY created_at DESC, id DESC',
+          [Number(workshopId)]
+        )
+      : await dbQuery<WorksheetTokenRow>('SELECT * FROM worksheet_tokens ORDER BY created_at DESC, id DESC');
 
     const entries = entryRows.map(toWorksheetEntry);
 
@@ -192,8 +189,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    seedDb();
-    const db = getDb();
+    await seedDb();
     const payload = (await request.json()) as PostPayload;
 
     if (payload.action === 'create_token') {
@@ -205,9 +201,10 @@ export async function POST(request: NextRequest) {
 
       while (!token) {
         const candidate = `ws-${crypto.randomBytes(3).toString('hex')}`;
-        const exists = db
-          .prepare('SELECT 1 FROM worksheet_tokens WHERE token = ? LIMIT 1')
-          .get(candidate) as { 1: number } | undefined;
+        const exists = await dbQueryOne<{ exists: number }>(
+          'SELECT 1 AS exists FROM worksheet_tokens WHERE token = ? LIMIT 1',
+          [candidate]
+        );
 
         if (!exists) {
           token = candidate;
@@ -215,12 +212,13 @@ export async function POST(request: NextRequest) {
       }
 
       const createdAt = new Date().toISOString();
-      db.prepare(
+      await dbQuery(
         `
           INSERT INTO worksheet_tokens (token, workshop_id, template_key, created_at, active)
           VALUES (?, ?, ?, ?, 1)
-        `
-      ).run(token, payload.workshop_id, payload.template_key, createdAt);
+        `,
+        [token, payload.workshop_id, payload.template_key, createdAt]
+      );
 
       return NextResponse.json({
         token,
@@ -245,7 +243,7 @@ export async function POST(request: NextRequest) {
       let tokenId: number | null = null;
 
       if (payload.token) {
-        const tokenRow = getTokenByValue(payload.token);
+        const tokenRow = await getTokenByValue(payload.token);
 
         if (
           !tokenRow ||
@@ -257,7 +255,7 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'Token is invalid' }, { status: 400 });
         }
 
-        const existingEntry = getEntryByTokenId(tokenRow.id);
+        const existingEntry = await getEntryByTokenId(tokenRow.id);
         if (existingEntry) {
           return NextResponse.json({ error: 'Worksheet already submitted for this token' }, { status: 409 });
         }
@@ -265,9 +263,8 @@ export async function POST(request: NextRequest) {
         tokenId = tokenRow.id;
       }
 
-      const result = db
-        .prepare(
-          `
+      const entry = await dbQueryOne<WorksheetEntryRow>(
+        `
             INSERT INTO worksheet_entries (
               token_id,
               workshop_id,
@@ -283,9 +280,9 @@ export async function POST(request: NextRequest) {
               review_note
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, '', NULL, '')
-          `
-        )
-        .run(
+            RETURNING *
+          `,
+        [
           tokenId,
           payload.workshop_id,
           payload.template_key,
@@ -294,11 +291,8 @@ export async function POST(request: NextRequest) {
           role,
           payload.content_json,
           new Date().toISOString()
-        );
-
-      const entry = db
-        .prepare('SELECT * FROM worksheet_entries WHERE id = ? LIMIT 1')
-        .get(result.lastInsertRowid) as WorksheetEntryRow | undefined;
+        ]
+      );
 
       return NextResponse.json({
         success: true,
@@ -315,8 +309,7 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    seedDb();
-    const db = getDb();
+    await seedDb();
     const payload = (await request.json()) as PutPayload;
 
     if (payload.action === 'review') {
@@ -325,7 +318,7 @@ export async function PUT(request: NextRequest) {
         return NextResponse.json({ error: 'Invalid review payload' }, { status: 400 });
       }
 
-      db.prepare(
+      await dbQuery(
         `
           UPDATE worksheet_entries
           SET reviewed = 1,
@@ -333,8 +326,9 @@ export async function PUT(request: NextRequest) {
               reviewed_at = ?,
               review_note = ?
           WHERE id = ?
-        `
-      ).run(reviewer, new Date().toISOString(), String(payload.review_note ?? '').trim(), payload.id);
+        `,
+        [reviewer, new Date().toISOString(), String(payload.review_note ?? '').trim(), payload.id]
+      );
 
       return NextResponse.json({ success: true });
     }
@@ -344,7 +338,7 @@ export async function PUT(request: NextRequest) {
         return NextResponse.json({ error: 'Invalid deactivate_token payload' }, { status: 400 });
       }
 
-      db.prepare('UPDATE worksheet_tokens SET active = 0 WHERE id = ?').run(payload.id);
+      await dbQuery('UPDATE worksheet_tokens SET active = 0 WHERE id = ?', [payload.id]);
       return NextResponse.json({ success: true });
     }
 

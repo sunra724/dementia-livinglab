@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { dbQuery, dbQueryOne, updateById, type DbValue } from '@/lib/db';
 import { seedDb } from '@/lib/seed';
 import type {
   DementiaStage,
@@ -122,7 +122,7 @@ function toSubject(row: SubjectRow): Subject {
   };
 }
 
-function normalizeParticipantValue(field: string, value: unknown) {
+function normalizeParticipantValue(field: string, value: unknown): DbValue {
   if (field === 'role') {
     return String(value) as RoleType;
   }
@@ -130,7 +130,7 @@ function normalizeParticipantValue(field: string, value: unknown) {
   return String(value ?? '').trim();
 }
 
-function normalizeInstitutionValue(field: string, value: unknown) {
+function normalizeInstitutionValue(field: string, value: unknown): DbValue {
   if (field === 'mou_signed') {
     return value ? 1 : 0;
   }
@@ -150,7 +150,7 @@ function normalizeInstitutionValue(field: string, value: unknown) {
   return String(value ?? '').trim();
 }
 
-function normalizeSubjectValue(field: string, value: unknown) {
+function normalizeSubjectValue(field: string, value: unknown): DbValue {
   if (field === 'consent_signed' || field === 'dropout') {
     return value ? 1 : 0;
   }
@@ -181,11 +181,11 @@ function normalizeSubjectValue(field: string, value: unknown) {
 function buildChanges(
   allowedFields: Set<string>,
   payload: RequestPayload,
-  normalizer: (field: string, value: unknown) => unknown
+  normalizer: (field: string, value: unknown) => DbValue
 ) {
   const changes = payload.changes ?? (payload.field ? { [payload.field]: payload.value } : {});
 
-  return Object.entries(changes).reduce<Record<string, unknown>>((result, [field, value]) => {
+  return Object.entries(changes).reduce<Record<string, DbValue>>((result, [field, value]) => {
     if (!allowedFields.has(field)) {
       return result;
     }
@@ -195,28 +195,12 @@ function buildChanges(
   }, {});
 }
 
-function updateRow(table: string, id: number, changes: Record<string, unknown>) {
-  const entries = Object.entries(changes);
-  if (!entries.length) {
-    return false;
-  }
-
-  const db = getDb();
-  const setClause = entries.map(([field]) => `${field} = ?`).join(', ');
-  db.prepare(`UPDATE ${table} SET ${setClause} WHERE id = ?`).run(
-    ...entries.map(([, value]) => value),
-    id
-  );
-
-  return true;
-}
-
-function nextSubjectCode(type: SubjectType) {
-  const db = getDb();
+async function nextSubjectCode(type: SubjectType) {
   const prefix = type === 'elder' ? 'E' : 'F';
-  const row = db
-    .prepare('SELECT code FROM subjects WHERE code LIKE ? ORDER BY code DESC LIMIT 1')
-    .get(`${prefix}%`) as { code: string } | undefined;
+  const row = await dbQueryOne<{ code: string }>(
+    'SELECT code FROM subjects WHERE code LIKE ? ORDER BY code DESC LIMIT 1',
+    [`${prefix}%`]
+  );
 
   if (!row) {
     return `${prefix}001`;
@@ -228,34 +212,27 @@ function nextSubjectCode(type: SubjectType) {
 
 export async function GET() {
   try {
-    seedDb();
-    const db = getDb();
+    await seedDb();
 
-    const activists = db
-      .prepare(
-        `
+    const activists = await dbQuery<ParticipantRow>(
+      `
           SELECT * FROM participants
           WHERE active = 1 AND role IN ('activist', 'facilitator', 'expert')
           ORDER BY joined_date ASC, id ASC
         `
-      )
-      .all() as ParticipantRow[];
+    );
 
-    const institutionStaffs = db
-      .prepare(
-        `
+    const institutionStaffs = await dbQuery<ParticipantRow>(
+      `
           SELECT * FROM participants
           WHERE active = 1 AND role = 'institution_staff'
           ORDER BY joined_date ASC, id ASC
         `
-      )
-      .all() as ParticipantRow[];
+    );
 
-    const institutions = db
-      .prepare('SELECT * FROM institutions ORDER BY id ASC')
-      .all() as InstitutionRow[];
+    const institutions = await dbQuery<InstitutionRow>('SELECT * FROM institutions ORDER BY id ASC');
 
-    const subjects = db.prepare('SELECT * FROM subjects ORDER BY code ASC').all() as SubjectRow[];
+    const subjects = await dbQuery<SubjectRow>('SELECT * FROM subjects ORDER BY code ASC');
 
     return NextResponse.json({
       activists: activists.map(toParticipant),
@@ -271,7 +248,7 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   try {
-    seedDb();
+    await seedDb();
     const payload = (await request.json()) as RequestPayload;
 
     if (!payload.action) {
@@ -285,7 +262,7 @@ export async function PUT(request: NextRequest) {
         }
 
         const changes = buildChanges(participantFields, payload, normalizeParticipantValue);
-        const updated = updateRow('participants', payload.id, changes);
+        const updated = await updateById('participants', payload.id, changes);
 
         if (!updated) {
           return NextResponse.json({ error: 'No valid participant fields provided' }, { status: 400 });
@@ -299,16 +276,19 @@ export async function PUT(request: NextRequest) {
           return NextResponse.json({ error: 'id is required' }, { status: 400 });
         }
 
-        const db = getDb();
-        const current = db
-          .prepare('SELECT active FROM participants WHERE id = ?')
-          .get(payload.id) as { active: number } | undefined;
+        const current = await dbQueryOne<{ active: number }>(
+          'SELECT active FROM participants WHERE id = ?',
+          [payload.id]
+        );
 
         if (!current) {
           return NextResponse.json({ error: 'Participant not found' }, { status: 404 });
         }
 
-        db.prepare('UPDATE participants SET active = ? WHERE id = ?').run(current.active ? 0 : 1, payload.id);
+        await dbQuery('UPDATE participants SET active = ? WHERE id = ?', [
+          current.active ? 0 : 1,
+          payload.id,
+        ]);
         return NextResponse.json({ success: true });
       }
 
@@ -318,7 +298,7 @@ export async function PUT(request: NextRequest) {
         }
 
         const changes = buildChanges(institutionFields, payload, normalizeInstitutionValue);
-        const updated = updateRow('institutions', payload.id, changes);
+        const updated = await updateById('institutions', payload.id, changes);
 
         if (!updated) {
           return NextResponse.json({ error: 'No valid institution fields provided' }, { status: 400 });
@@ -333,7 +313,7 @@ export async function PUT(request: NextRequest) {
         }
 
         const changes = buildChanges(subjectFields, payload, normalizeSubjectValue);
-        const updated = updateRow('subjects', payload.id, changes);
+        const updated = await updateById('subjects', payload.id, changes);
 
         if (!updated) {
           return NextResponse.json({ error: 'No valid subject fields provided' }, { status: 400 });
@@ -353,29 +333,28 @@ export async function PUT(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    seedDb();
+    await seedDb();
     const payload = (await request.json()) as RequestPayload;
 
     if (!payload.type || !payload.data) {
       return NextResponse.json({ error: 'type and data are required' }, { status: 400 });
     }
 
-    const db = getDb();
-
     if (payload.type === 'participant') {
       const data = payload.data;
-      db.prepare(
+      await dbQuery(
         `
           INSERT INTO participants (name, role, affiliation, contact, joined_date, active, notes)
           VALUES (?, ?, ?, ?, ?, 1, ?)
-        `
-      ).run(
-        String(data.name ?? '').trim(),
-        String(data.role ?? 'activist'),
-        String(data.affiliation ?? '').trim(),
-        String(data.contact ?? '').trim(),
-        String(data.joined_date ?? ''),
-        String(data.notes ?? '').trim()
+        `,
+        [
+          String(data.name ?? '').trim(),
+          String(data.role ?? 'activist'),
+          String(data.affiliation ?? '').trim(),
+          String(data.contact ?? '').trim(),
+          String(data.joined_date ?? ''),
+          String(data.notes ?? '').trim(),
+        ]
       );
 
       return NextResponse.json({ success: true });
@@ -383,52 +362,54 @@ export async function POST(request: NextRequest) {
 
     if (payload.type === 'institution') {
       const data = payload.data;
-      db.prepare(
+      await dbQuery(
         `
           INSERT INTO institutions (
             name, type, representative, contact_person, contact,
             address, mou_signed, mou_date, participating_phases, notes
           )
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `
-      ).run(
-        String(data.name ?? '').trim(),
-        String(data.type ?? 'other'),
-        String(data.representative ?? '').trim(),
-        String(data.contact_person ?? '').trim(),
-        String(data.contact ?? '').trim(),
-        String(data.address ?? '').trim(),
-        data.mou_signed ? 1 : 0,
-        data.mou_date ? String(data.mou_date) : null,
-        JSON.stringify(Array.isArray(data.participating_phases) ? data.participating_phases : []),
-        String(data.notes ?? '').trim()
+        `,
+        [
+          String(data.name ?? '').trim(),
+          String(data.type ?? 'other'),
+          String(data.representative ?? '').trim(),
+          String(data.contact_person ?? '').trim(),
+          String(data.contact ?? '').trim(),
+          String(data.address ?? '').trim(),
+          data.mou_signed ? 1 : 0,
+          data.mou_date ? String(data.mou_date) : null,
+          JSON.stringify(Array.isArray(data.participating_phases) ? data.participating_phases : []),
+          String(data.notes ?? '').trim(),
+        ]
       );
 
       return NextResponse.json({ success: true });
     }
 
     const subjectType = String(payload.data.type ?? 'elder') as SubjectType;
-    const code = nextSubjectCode(subjectType);
+    const code = await nextSubjectCode(subjectType);
 
-    db.prepare(
+    await dbQuery(
       `
         INSERT INTO subjects (
           code, type, dementia_stage, age_group, institution_id,
           consent_signed, participation_phases, dropout, dropout_reason, notes
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `
-    ).run(
-      code,
-      subjectType,
-      String(payload.data.dementia_stage ?? 'unknown'),
-      String(payload.data.age_group ?? '').trim(),
-      Number(payload.data.institution_id ?? 1),
-      payload.data.consent_signed ? 1 : 0,
-      JSON.stringify(Array.isArray(payload.data.participation_phases) ? payload.data.participation_phases : [1]),
-      payload.data.dropout ? 1 : 0,
-      payload.data.dropout ? String(payload.data.dropout_reason ?? '').trim() || null : null,
-      String(payload.data.notes ?? '').trim()
+      `,
+      [
+        code,
+        subjectType,
+        String(payload.data.dementia_stage ?? 'unknown'),
+        String(payload.data.age_group ?? '').trim(),
+        Number(payload.data.institution_id ?? 1),
+        payload.data.consent_signed ? 1 : 0,
+        JSON.stringify(Array.isArray(payload.data.participation_phases) ? payload.data.participation_phases : [1]),
+        payload.data.dropout ? 1 : 0,
+        payload.data.dropout ? String(payload.data.dropout_reason ?? '').trim() || null : null,
+        String(payload.data.notes ?? '').trim(),
+      ]
     );
 
     return NextResponse.json({ success: true, code });

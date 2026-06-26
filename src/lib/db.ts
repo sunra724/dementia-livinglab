@@ -1,29 +1,85 @@
-import Database from 'better-sqlite3';
-import path from 'path';
-import fs from 'fs';
+import postgres from 'postgres';
 
-function resolveDbPath() {
-  const configuredPath = process.env.DATABASE_PATH?.trim();
-  if (configuredPath) {
-    return path.resolve(configuredPath);
+export type DbValue = string | number | boolean | null | Date;
+
+let sqlClient: postgres.Sql | null = null;
+
+function getDatabaseUrl() {
+  const databaseUrl = process.env.POSTGRES_URL?.trim() || process.env.DATABASE_URL?.trim();
+
+  if (!databaseUrl) {
+    throw new Error('POSTGRES_URL or DATABASE_URL is required for persistent storage on Vercel.');
   }
 
-  const configuredDir = process.env.DATABASE_DIR?.trim();
-  const dbDir = configuredDir ? path.resolve(configuredDir) : path.join(process.cwd(), 'data');
-  return path.join(dbDir, 'livinglab.db');
+  return databaseUrl;
 }
 
-const DB_PATH = resolveDbPath();
-const DB_DIR = path.dirname(DB_PATH);
+function shouldUseSsl(databaseUrl: string) {
+  return !databaseUrl.includes('localhost') && !databaseUrl.includes('127.0.0.1');
+}
 
-let db: Database.Database | null = null;
+function toPostgresPlaceholders(query: string) {
+  let index = 0;
+  return query.replace(/\?/g, () => `$${++index}`);
+}
 
-export function getDb(): Database.Database {
-  if (!db) {
-    if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
-    db = new Database(DB_PATH);
-    db.pragma('journal_mode = WAL');
-    db.pragma('foreign_keys = ON');
+export function getSql() {
+  if (!sqlClient) {
+    const databaseUrl = getDatabaseUrl();
+    sqlClient = postgres(databaseUrl, {
+      max: 1,
+      prepare: false,
+      ssl: shouldUseSsl(databaseUrl) ? 'require' : undefined,
+    });
   }
-  return db;
+
+  return sqlClient;
+}
+
+export async function dbQuery<T extends object>(
+  query: string,
+  values: DbValue[] = []
+) {
+  const rows = await getSql().unsafe(toPostgresPlaceholders(query), values);
+  return rows as unknown as T[];
+}
+
+export async function dbQueryOne<T extends object>(
+  query: string,
+  values: DbValue[] = []
+) {
+  const rows = await dbQuery<T>(query, values);
+  return rows[0];
+}
+
+export async function dbExecute(query: string, values: DbValue[] = []) {
+  await dbQuery(query, values);
+}
+
+export async function updateById(
+  tableName: string,
+  id: number,
+  changes: Record<string, DbValue>
+) {
+  const entries = Object.entries(changes);
+
+  if (!entries.length) {
+    return false;
+  }
+
+  const setClause = entries.map(([field]) => `${field} = ?`).join(', ');
+  await dbExecute(
+    `UPDATE ${tableName} SET ${setClause} WHERE id = ?`,
+    [...entries.map(([, value]) => value), id]
+  );
+
+  return true;
+}
+
+export async function closeSql() {
+  if (sqlClient) {
+    const client = sqlClient;
+    sqlClient = null;
+    await client.end({ timeout: 1 });
+  }
 }

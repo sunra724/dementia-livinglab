@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { dbQuery, dbQueryOne, updateById, type DbValue } from '@/lib/db';
 import { seedDb } from '@/lib/seed';
 import type { KpiItem, LivingLabPhase } from '@/lib/types';
 
@@ -15,7 +15,7 @@ type RequestPayload = {
 
 const kpiFields = new Set(['category', 'indicator', 'target', 'current', 'unit', 'trend', 'phase_related', 'notes']);
 
-function normalizeKpiValue(field: string, value: unknown) {
+function normalizeKpiValue(field: string, value: unknown): DbValue {
   if (field === 'target' || field === 'current') {
     return Number(value ?? 0);
   }
@@ -30,7 +30,7 @@ function normalizeKpiValue(field: string, value: unknown) {
 function buildChanges(payload: RequestPayload) {
   const changes = payload.changes ?? (payload.field ? { [payload.field]: payload.value } : {});
 
-  return Object.entries(changes).reduce<Record<string, unknown>>((result, [field, value]) => {
+  return Object.entries(changes).reduce<Record<string, DbValue>>((result, [field, value]) => {
     if (!kpiFields.has(field)) {
       return result;
     }
@@ -42,9 +42,8 @@ function buildChanges(payload: RequestPayload) {
 
 export async function GET() {
   try {
-    seedDb();
-    const db = getDb();
-    const items = db.prepare('SELECT * FROM kpi_items ORDER BY category ASC, id ASC').all() as KpiItem[];
+    await seedDb();
+    const items = await dbQuery<KpiItem>('SELECT * FROM kpi_items ORDER BY category ASC, id ASC');
 
     return NextResponse.json(items);
   } catch (error) {
@@ -55,7 +54,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    seedDb();
+    await seedDb();
     const payload = (await request.json()) as RequestPayload;
     const data = payload.data ?? {};
     const category = String(data.category ?? '').trim();
@@ -74,17 +73,15 @@ export async function POST(request: NextRequest) {
       rawPhaseRelated === null || rawPhaseRelated === undefined ? null : Number(rawPhaseRelated);
     const notes = String(data.notes ?? '').trim();
 
-    const db = getDb();
-    const result = db
-      .prepare(
-        `
+    const item = await dbQueryOne<KpiItem>(
+      `
           INSERT INTO kpi_items (category, indicator, target, current, unit, trend, phase_related, notes)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `
-      )
-      .run(category, indicator, target, current, unit, trend, phaseRelated, notes);
+          RETURNING *
+        `,
+      [category, indicator, target, current, unit, trend, phaseRelated, notes]
+    );
 
-    const item = db.prepare('SELECT * FROM kpi_items WHERE id = ?').get(result.lastInsertRowid) as KpiItem | undefined;
     return NextResponse.json({ item });
   } catch (error) {
     console.error('POST /api/kpi error:', error);
@@ -94,8 +91,7 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    seedDb();
-    const db = getDb();
+    await seedDb();
     const payload = (await request.json()) as RequestPayload;
 
     if (typeof payload.id !== 'number') {
@@ -109,11 +105,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'No valid KPI fields provided' }, { status: 400 });
     }
 
-    const setClause = entries.map(([field]) => `${field} = ?`).join(', ');
-    db.prepare(`UPDATE kpi_items SET ${setClause} WHERE id = ?`).run(
-      ...entries.map(([, value]) => value),
-      payload.id
-    );
+    await updateById('kpi_items', payload.id, changes);
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -124,15 +116,14 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    seedDb();
+    await seedDb();
     const payload = (await request.json()) as { id?: number };
 
     if (typeof payload.id !== 'number') {
       return NextResponse.json({ error: 'id is required' }, { status: 400 });
     }
 
-    const db = getDb();
-    db.prepare('DELETE FROM kpi_items WHERE id = ?').run(payload.id);
+    await dbQuery('DELETE FROM kpi_items WHERE id = ?', [payload.id]);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('DELETE /api/kpi error:', error);

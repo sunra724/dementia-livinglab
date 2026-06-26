@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { dbQuery, updateById, type DbValue } from '@/lib/db';
 import { seedDb } from '@/lib/seed';
 import type { ChecklistItem, LivingLabPhase } from '@/lib/types';
 
@@ -37,7 +37,11 @@ function toChecklistItem(row: ChecklistRow): ChecklistItem {
   };
 }
 
-function normalizeChecklistValue(field: string, value: unknown, previous: Record<string, unknown>) {
+function normalizeChecklistValue(
+  field: string,
+  value: unknown,
+  previous: Record<string, unknown>
+): DbValue {
   if (field === 'phase') {
     return Number(value) as LivingLabPhase;
   }
@@ -89,9 +93,8 @@ function buildChanges(payload: RequestPayload) {
 
 export async function GET() {
   try {
-    seedDb();
-    const db = getDb();
-    const items = db.prepare('SELECT * FROM checklist_items ORDER BY phase ASC, id ASC').all() as ChecklistRow[];
+    await seedDb();
+    const items = await dbQuery<ChecklistRow>('SELECT * FROM checklist_items ORDER BY phase ASC, id ASC');
 
     return NextResponse.json(items.map(toChecklistItem));
   } catch (error) {
@@ -102,7 +105,7 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   try {
-    seedDb();
+    await seedDb();
     const payload = (await request.json()) as RequestPayload;
 
     if (typeof payload.id !== 'number') {
@@ -117,11 +120,10 @@ export async function PUT(request: NextRequest) {
     }
 
     const normalizedEntries = entries.map(([field, value]) => [field, normalizeChecklistValue(field, value, rawChanges)] as const);
-    const db = getDb();
-    const setClause = normalizedEntries.map(([field]) => `${field} = ?`).join(', ');
-    db.prepare(`UPDATE checklist_items SET ${setClause} WHERE id = ?`).run(
-      ...normalizedEntries.map(([, value]) => value),
-      payload.id
+    await updateById(
+      'checklist_items',
+      payload.id,
+      Object.fromEntries(normalizedEntries) as Record<string, DbValue>
     );
 
     return NextResponse.json({ success: true });

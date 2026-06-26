@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { dbQuery } from '@/lib/db';
 import { seedDb } from '@/lib/seed';
 import type {
   FacilitatorRole,
@@ -41,8 +41,7 @@ function isFacilitatorRole(value: string): value is FacilitatorRole {
 
 export async function GET(request: NextRequest) {
   try {
-    seedDb();
-    const db = getDb();
+    await seedDb();
     const { searchParams } = new URL(request.url);
     const workshopId = Number(searchParams.get('workshop_id'));
 
@@ -50,27 +49,24 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'workshop_id is required' }, { status: 400 });
     }
 
-    const assignments = db
-      .prepare(
-        `
+    const assignments = await dbQuery<RoleAssignmentRow>(
+      `
           SELECT fr.*, p.name as participant_name
           FROM facilitator_roles fr
           JOIN participants p ON p.id = fr.participant_id
           WHERE fr.workshop_id = ?
           ORDER BY fr.id ASC
-        `
-      )
-      .all(workshopId) as RoleAssignmentRow[];
+        `,
+      [workshopId]
+    );
 
-    const availableParticipants = db
-      .prepare(
-        `
+    const availableParticipants = await dbQuery<ParticipantRow>(
+      `
           SELECT * FROM participants
           WHERE active = 1 AND role IN ('activist', 'facilitator', 'expert')
           ORDER BY joined_date ASC, id ASC
         `
-      )
-      .all() as ParticipantRow[];
+    );
 
     return NextResponse.json({
       assignments,
@@ -84,7 +80,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    seedDb();
+    await seedDb();
     const payload = (await request.json()) as CreateAssignmentPayload;
     const workshopId = Number(payload.workshop_id);
     const participantId = Number(payload.participant_id);
@@ -95,14 +91,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid role assignment payload' }, { status: 400 });
     }
 
-    const db = getDb();
-    db.prepare('DELETE FROM facilitator_roles WHERE workshop_id = ? AND role = ?').run(workshopId, role);
-    db.prepare(
+    await dbQuery('DELETE FROM facilitator_roles WHERE workshop_id = ? AND role = ?', [workshopId, role]);
+    await dbQuery(
       `
-        INSERT OR REPLACE INTO facilitator_roles (workshop_id, participant_id, role, notes)
+        INSERT INTO facilitator_roles (workshop_id, participant_id, role, notes)
         VALUES (?, ?, ?, ?)
-      `
-    ).run(workshopId, participantId, role, notes);
+      `,
+      [workshopId, participantId, role, notes]
+    );
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -113,15 +109,14 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    seedDb();
+    await seedDb();
     const payload = (await request.json()) as DeleteAssignmentPayload;
 
     if (typeof payload.id !== 'number') {
       return NextResponse.json({ error: 'id is required' }, { status: 400 });
     }
 
-    const db = getDb();
-    db.prepare('DELETE FROM facilitator_roles WHERE id = ?').run(payload.id);
+    await dbQuery('DELETE FROM facilitator_roles WHERE id = ?', [payload.id]);
 
     return NextResponse.json({ success: true });
   } catch (error) {

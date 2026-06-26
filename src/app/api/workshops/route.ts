@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { dbQuery, updateById, type DbValue } from '@/lib/db';
 import { seedDb } from '@/lib/seed';
 import type {
   LivingLabPhase,
@@ -59,7 +59,7 @@ function toWorksheetEntry(row: WorksheetRow): WorksheetEntry {
   };
 }
 
-function normalizeWorkshopValue(field: string, value: unknown) {
+function normalizeWorkshopValue(field: string, value: unknown): DbValue {
   if (field === 'type') {
     return String(value) as WorkshopType;
   }
@@ -87,7 +87,7 @@ function normalizeWorkshopValue(field: string, value: unknown) {
   return String(value ?? '').trim();
 }
 
-function normalizeWorksheetValue(field: string, value: unknown) {
+function normalizeWorksheetValue(field: string, value: unknown): DbValue {
   if (field === 'token_id' || field === 'workshop_id') {
     return value === null || value === '' ? null : Number(value);
   }
@@ -114,11 +114,11 @@ function normalizeWorksheetValue(field: string, value: unknown) {
 function buildChanges(
   fields: Set<string>,
   payload: RequestPayload,
-  normalizer: (field: string, value: unknown) => unknown
+  normalizer: (field: string, value: unknown) => DbValue
 ) {
   const changes = payload.changes ?? (payload.field ? { [payload.field]: payload.value } : {});
 
-  return Object.entries(changes).reduce<Record<string, unknown>>((result, [field, value]) => {
+  return Object.entries(changes).reduce<Record<string, DbValue>>((result, [field, value]) => {
     if (!fields.has(field)) {
       return result;
     }
@@ -130,12 +130,11 @@ function buildChanges(
 
 export async function GET() {
   try {
-    seedDb();
-    const db = getDb();
-    const workshops = db.prepare('SELECT * FROM workshops ORDER BY scheduled_date ASC, id ASC').all() as Workshop[];
-    const worksheetEntries = db
-      .prepare('SELECT * FROM worksheet_entries ORDER BY workshop_id ASC, id ASC')
-      .all() as WorksheetRow[];
+    await seedDb();
+    const workshops = await dbQuery<Workshop>('SELECT * FROM workshops ORDER BY scheduled_date ASC, id ASC');
+    const worksheetEntries = await dbQuery<WorksheetRow>(
+      'SELECT * FROM worksheet_entries ORDER BY workshop_id ASC, id ASC'
+    );
 
     return NextResponse.json({
       workshops,
@@ -149,14 +148,12 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   try {
-    seedDb();
+    await seedDb();
     const payload = (await request.json()) as RequestPayload;
 
     if (typeof payload.id !== 'number' || !payload.action) {
       return NextResponse.json({ error: 'action and id are required' }, { status: 400 });
     }
-
-    const db = getDb();
 
     if (payload.action === 'update_workshop') {
       const changes = buildChanges(workshopFields, payload, normalizeWorkshopValue);
@@ -166,11 +163,7 @@ export async function PUT(request: NextRequest) {
         return NextResponse.json({ error: 'No valid workshop fields provided' }, { status: 400 });
       }
 
-      const setClause = entries.map(([field]) => `${field} = ?`).join(', ');
-      db.prepare(`UPDATE workshops SET ${setClause} WHERE id = ?`).run(
-        ...entries.map(([, value]) => value),
-        payload.id
-      );
+      await updateById('workshops', payload.id, changes);
 
       return NextResponse.json({ success: true });
     }
@@ -183,11 +176,7 @@ export async function PUT(request: NextRequest) {
         return NextResponse.json({ error: 'No valid worksheet fields provided' }, { status: 400 });
       }
 
-      const setClause = entries.map(([field]) => `${field} = ?`).join(', ');
-      db.prepare(`UPDATE worksheet_entries SET ${setClause} WHERE id = ?`).run(
-        ...entries.map(([, value]) => value),
-        payload.id
-      );
+      await updateById('worksheet_entries', payload.id, changes);
 
       return NextResponse.json({ success: true });
     }
