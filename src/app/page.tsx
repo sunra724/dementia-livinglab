@@ -1,7 +1,10 @@
-'use client';
-
 import OverviewDashboard from '@/components/dashboard/OverviewDashboard';
+import { getCachedDashboardData } from '@/lib/dashboard-data';
 
-export default function HomePage() {
-  return <OverviewDashboard mode="view" />;
+export const revalidate = 60;
+
+export default async function HomePage() {
+  const initialData = await getCachedDashboardData();
+
+  return <OverviewDashboard mode="view" initialData={initialData} />;
 }

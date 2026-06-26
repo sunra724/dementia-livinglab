@@ -22,48 +22,19 @@ import ProgressBar from '@/components/dashboard/ProgressBar';
 import ActivityCalendar, { type ActivityCalendarEvent } from '@/components/timeline/ActivityCalendar';
 import PhaseTimeline from '@/components/timeline/PhaseTimeline';
 import { LOCAL_CONTEXT_NEWS, NATIONAL_DEMENTIA_STATS } from '@/lib/dementia-stats';
+import type { DashboardResponse } from '@/lib/dashboard-data';
 import { formatLargeNumber } from '@/lib/format';
 import type {
-  BudgetItem,
-  ChecklistItem,
-  KpiItem,
   LivingLabPhase,
-  PhaseGateResult,
   ProgressStatus,
   PromotionChannel,
-  PromotionRecord,
-  Subject,
-  Workshop,
-  WorksheetEntry,
 } from '@/lib/types';
 
 type DashboardMode = 'view' | 'admin';
 
 interface OverviewDashboardProps {
   mode: DashboardMode;
-}
-
-interface WorkshopsResponse {
-  workshops: Workshop[];
-  worksheetEntries: WorksheetEntry[];
-}
-
-interface SafetyResponse {
-  gate_status: PhaseGateResult[];
-}
-
-interface ParticipantsResponse {
-  subjects: Subject[];
-}
-
-interface DashboardResponse {
-  kpiItems: KpiItem[];
-  workshopPayload: WorkshopsResponse;
-  checklistItems: ChecklistItem[];
-  promotionItems: PromotionRecord[];
-  budgetItems: BudgetItem[];
-  safetyData: SafetyResponse;
-  participantsPayload: ParticipantsResponse;
+  initialData?: DashboardResponse;
 }
 
 interface SummaryCard {
@@ -185,7 +156,7 @@ function DashboardError({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-export default function OverviewDashboard({ mode }: OverviewDashboardProps) {
+export default function OverviewDashboard({ mode, initialData }: OverviewDashboardProps) {
   const router = useRouter();
   const now = new Date();
   const currentYear = now.getFullYear();
@@ -197,7 +168,9 @@ export default function OverviewDashboard({ mode }: OverviewDashboardProps) {
     isLoading: dashboardLoading,
     mutate: mutateDashboard,
   } = useSWR<DashboardResponse>('/api/dashboard', fetcher, {
-    dedupingInterval: 15_000,
+    dedupingInterval: 60_000,
+    fallbackData: initialData,
+    revalidateOnMount: !initialData,
   });
 
   const isLoading = dashboardLoading;
