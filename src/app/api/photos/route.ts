@@ -47,7 +47,12 @@ function parseNullableString(value: FormDataEntryValue | null) {
 }
 
 function hasBlobStorage() {
-  return Boolean(process.env.BLOB_READ_WRITE_TOKEN?.trim());
+  const hasReadWriteToken = Boolean(process.env.BLOB_READ_WRITE_TOKEN?.trim());
+  const hasOidcCredentials = Boolean(
+    process.env.BLOB_STORE_ID?.trim() && process.env.VERCEL_OIDC_TOKEN?.trim()
+  );
+
+  return hasReadWriteToken || hasOidcCredentials;
 }
 
 function isRemotePhoto(filename: string) {

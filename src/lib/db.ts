@@ -29,6 +29,10 @@ export function getSql() {
     sqlClient = postgres(databaseUrl, {
       max: 1,
       prepare: false,
+      connect_timeout: 10,
+      idle_timeout: 1,
+      max_lifetime: 60,
+      onnotice: () => undefined,
       ssl: shouldUseSsl(databaseUrl) ? 'require' : undefined,
     });
   }

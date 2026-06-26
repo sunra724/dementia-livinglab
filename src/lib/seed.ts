@@ -12,6 +12,27 @@ async function hasRows(tableName: string) {
   return Number(result?.count ?? 0) > 0;
 }
 
+function isPostgresErrorCode(error: unknown, code: string) {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === code
+  );
+}
+
+async function hasRowsIfTableExists(tableName: string) {
+  try {
+    return await hasRows(tableName);
+  } catch (error) {
+    if (isPostgresErrorCode(error, '42P01')) {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
 async function insertRows(
   tableName: string,
   columns: string[],
@@ -443,6 +464,11 @@ async function resetSequences() {
 export async function seedDb() {
   if (!seedPromise) {
     seedPromise = (async () => {
+      const alreadySeeded = await hasRowsIfTableExists('participants');
+      if (alreadySeeded) {
+        return;
+      }
+
       await initDb();
 
       if (!(await hasRows('participants'))) {

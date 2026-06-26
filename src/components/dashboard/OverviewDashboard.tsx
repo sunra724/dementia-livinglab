@@ -56,6 +56,16 @@ interface ParticipantsResponse {
   subjects: Subject[];
 }
 
+interface DashboardResponse {
+  kpiItems: KpiItem[];
+  workshopPayload: WorkshopsResponse;
+  checklistItems: ChecklistItem[];
+  promotionItems: PromotionRecord[];
+  budgetItems: BudgetItem[];
+  safetyData: SafetyResponse;
+  participantsPayload: ParticipantsResponse;
+}
+
 interface SummaryCard {
   title: string;
   value: string;
@@ -181,92 +191,42 @@ export default function OverviewDashboard({ mode }: OverviewDashboardProps) {
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth() + 1;
 
-  const { data: kpiItems, error: kpiError, isLoading: kpiLoading, mutate: mutateKpi } = useSWR<KpiItem[]>(
-    '/api/kpi',
-    fetcher
-  );
   const {
-    data: workshopPayload,
-    error: workshopError,
-    isLoading: workshopLoading,
-    mutate: mutateWorkshops,
-  } = useSWR<WorkshopsResponse>('/api/workshops', fetcher);
-  const {
-    data: checklistItems,
-    error: guidebookError,
-    isLoading: guidebookLoading,
-    mutate: mutateGuidebook,
-  } = useSWR<ChecklistItem[]>('/api/guidebook', fetcher);
-  const {
-    data: promotionItems,
-    error: promotionError,
-    isLoading: promotionLoading,
-    mutate: mutatePromotion,
-  } = useSWR<PromotionRecord[]>('/api/promotion', fetcher);
-  const {
-    data: budgetItems,
-    error: budgetError,
-    isLoading: budgetLoading,
-    mutate: mutateBudget,
-  } = useSWR<BudgetItem[]>('/api/budget', fetcher);
-  const {
-    data: safetyData,
-    error: safetyError,
-    isLoading: safetyLoading,
-    mutate: mutateSafety,
-  } = useSWR<SafetyResponse>('/api/safety', fetcher);
-  const {
-    data: participantsPayload,
-    error: participantsError,
-    isLoading: participantsLoading,
-    mutate: mutateParticipants,
-  } = useSWR<ParticipantsResponse>('/api/participants', fetcher);
+    data: dashboardData,
+    error: dashboardError,
+    isLoading: dashboardLoading,
+    mutate: mutateDashboard,
+  } = useSWR<DashboardResponse>('/api/dashboard', fetcher, {
+    dedupingInterval: 15_000,
+  });
 
-  const isLoading =
-    kpiLoading ||
-    workshopLoading ||
-    guidebookLoading ||
-    promotionLoading ||
-    budgetLoading ||
-    safetyLoading ||
-    participantsLoading;
-  const hasError = Boolean(
-    kpiError || workshopError || guidebookError || promotionError || budgetError || safetyError || participantsError
-  );
+  const isLoading = dashboardLoading;
+  const hasError = Boolean(dashboardError);
+  const hasAnyData = Boolean(dashboardData);
 
-  if (isLoading) {
+  if (isLoading && !hasAnyData) {
     return <DashboardLoading />;
   }
 
-  if (
-    hasError ||
-    !kpiItems ||
-    !workshopPayload ||
-    !checklistItems ||
-    !promotionItems ||
-    !budgetItems ||
-    !safetyData ||
-    !participantsPayload
-  ) {
+  if (hasError && !hasAnyData) {
     return (
       <DashboardError
         onRetry={() => {
-          void Promise.all([
-            mutateKpi(),
-            mutateWorkshops(),
-            mutateGuidebook(),
-            mutatePromotion(),
-            mutateBudget(),
-            mutateSafety(),
-            mutateParticipants(),
-          ]);
+          void mutateDashboard();
         }}
       />
     );
   }
 
-  const workshops = workshopPayload.workshops;
-  const subjects = participantsPayload.subjects;
+  const kpiItems = dashboardData?.kpiItems ?? [];
+  const workshops = dashboardData?.workshopPayload.workshops ?? [];
+  const checklistItems = dashboardData?.checklistItems ?? [];
+  const promotionItems = dashboardData?.promotionItems ?? [];
+  const budgetItems = dashboardData?.budgetItems ?? [];
+  const safetyData = dashboardData?.safetyData ?? {
+    gate_status: [],
+  };
+  const subjects = dashboardData?.participantsPayload.subjects ?? [];
   const projectMonth = calculateProjectMonth(now);
   const currentMonthWorkshops = workshops.filter((workshop) =>
     isSameYearMonth(workshop.scheduled_date, currentYear, currentMonth)
@@ -456,7 +416,7 @@ export default function OverviewDashboard({ mode }: OverviewDashboardProps) {
       throw new Error('kpi_update_failed');
     }
 
-    await mutateKpi();
+    await mutateDashboard();
   };
 
   return (
