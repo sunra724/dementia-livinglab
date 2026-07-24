@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isAdminRequest } from '@/lib/auth';
+import { recordAdminAudit } from '@/lib/audit';
 import { dbQuery, dbQueryOne, updateById, type DbValue } from '@/lib/db';
 import { seedDb } from '@/lib/seed';
 import type { LivingLabPhase, ProgressStatus, PromotionChannel, PromotionRecord } from '@/lib/types';
@@ -61,12 +63,23 @@ function buildChanges(payload: RequestPayload) {
   }, {});
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     await seedDb();
-    const items = await dbQuery<PromotionRecord>(
-      'SELECT * FROM promotion_records ORDER BY published_date DESC, id DESC'
-    );
+    if (isAdminRequest(request)) {
+      await recordAdminAudit(request, 'promotion');
+    }
+
+    const items = isAdminRequest(request)
+      ? await dbQuery<PromotionRecord>(
+          'SELECT * FROM promotion_records ORDER BY published_date DESC, id DESC'
+        )
+      : await dbQuery<PromotionRecord>(`
+          SELECT id, channel, title, published_date, phase, reach_count, url, status, '' AS notes
+          FROM promotion_records
+          WHERE status = 'completed'
+          ORDER BY published_date DESC, id DESC
+        `);
 
     return NextResponse.json(items);
   } catch (error) {
@@ -77,6 +90,11 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    if (!isAdminRequest(request)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    await recordAdminAudit(request, 'promotion');
     await seedDb();
     const payload = (await request.json()) as RequestPayload;
     const data = payload.data ?? {};
@@ -115,6 +133,11 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
+    if (!isAdminRequest(request)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    await recordAdminAudit(request, 'promotion');
     await seedDb();
     const payload = (await request.json()) as RequestPayload;
 
@@ -140,6 +163,11 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    if (!isAdminRequest(request)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    await recordAdminAudit(request, 'promotion');
     await seedDb();
     const payload = (await request.json()) as { id?: number };
 

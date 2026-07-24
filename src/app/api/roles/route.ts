@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isAdminRequest } from '@/lib/auth';
+import { recordAdminAudit } from '@/lib/audit';
 import { dbQuery } from '@/lib/db';
 import { seedDb } from '@/lib/seed';
 import type {
@@ -41,6 +43,11 @@ function isFacilitatorRole(value: string): value is FacilitatorRole {
 
 export async function GET(request: NextRequest) {
   try {
+    if (!isAdminRequest(request)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    await recordAdminAudit(request, 'facilitator_roles');
     await seedDb();
     const { searchParams } = new URL(request.url);
     const workshopId = Number(searchParams.get('workshop_id'));
@@ -80,6 +87,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    if (!isAdminRequest(request)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    await recordAdminAudit(request, 'facilitator_roles');
     await seedDb();
     const payload = (await request.json()) as CreateAssignmentPayload;
     const workshopId = Number(payload.workshop_id);
@@ -109,6 +121,11 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    if (!isAdminRequest(request)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    await recordAdminAudit(request, 'facilitator_roles');
     await seedDb();
     const payload = (await request.json()) as DeleteAssignmentPayload;
 

@@ -136,6 +136,13 @@ export default function SafetyPage() {
             <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
+        <div className="mt-6 rounded-2xl border border-red-100 bg-red-50/70 px-4 py-4">
+          <p className="text-sm leading-6 text-slate-600">
+            이 체크리스트는 정부합동평가·광역지자체평가·보건복지부평가 등 여러 평가체계에서 공통으로
+            요구하는 개인정보 비식별 처리·연구윤리 동의 절차를 그대로 충족하도록 설계되었습니다.
+            완료된 체크리스트는 평가 대응 근거자료로 바로 활용할 수 있습니다.
+          </p>
+        </div>
       </section>
 
       <section

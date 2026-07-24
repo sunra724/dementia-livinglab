@@ -3,6 +3,8 @@ import { mkdir, unlink, writeFile } from 'node:fs/promises';
 import { join, extname } from 'node:path';
 import { del, put } from '@vercel/blob';
 import { NextRequest, NextResponse } from 'next/server';
+import { isAdminRequest } from '@/lib/auth';
+import { recordAdminAudit } from '@/lib/audit';
 import { dbQuery, dbQueryOne } from '@/lib/db';
 import { seedDb } from '@/lib/seed';
 import type { FieldPhoto, LivingLabPhase } from '@/lib/types';
@@ -59,17 +61,21 @@ function isRemotePhoto(filename: string) {
   return filename.startsWith('https://') || filename.startsWith('http://');
 }
 
+function isBlobPhoto(filename: string) {
+  return isRemotePhoto(filename) || filename.startsWith('photos/');
+}
+
 async function savePhotoFile(file: File, filename: string) {
   if (hasBlobStorage()) {
     const blob = await put(`photos/${filename}`, file, {
-      access: 'public',
+      access: 'private',
       addRandomSuffix: false,
     });
 
-    return blob.url;
+    return blob.pathname;
   }
 
-  const uploadDir = join(process.cwd(), 'public', 'uploads', 'photos');
+  const uploadDir = join(process.cwd(), 'data', 'uploads', 'photos');
   await mkdir(uploadDir, { recursive: true });
   const buffer = Buffer.from(await file.arrayBuffer());
   await writeFile(join(uploadDir, filename), buffer);
@@ -77,14 +83,14 @@ async function savePhotoFile(file: File, filename: string) {
 }
 
 async function deletePhotoFile(filename: string) {
-  if (isRemotePhoto(filename)) {
+  if (isBlobPhoto(filename)) {
     if (hasBlobStorage()) {
       await del(filename).catch(() => undefined);
     }
     return;
   }
 
-  await unlink(join(process.cwd(), 'public', 'uploads', 'photos', filename)).catch(() => undefined);
+  await unlink(join(process.cwd(), 'data', 'uploads', 'photos', filename)).catch(() => undefined);
 }
 
 async function resolvePhotoPhase(
@@ -129,6 +135,11 @@ async function resolvePhotoPhase(
 
 export async function GET(request: NextRequest) {
   try {
+    if (!isAdminRequest(request)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    await recordAdminAudit(request, 'photos');
     await seedDb();
     const { searchParams } = new URL(request.url);
     const workshopId = searchParams.get('workshop_id');
@@ -168,6 +179,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    if (!isAdminRequest(request)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    await recordAdminAudit(request, 'photos');
     await seedDb();
     const formData = await request.formData();
     const file = formData.get('file');
@@ -230,6 +246,11 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
+    if (!isAdminRequest(request)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    await recordAdminAudit(request, 'photos');
     await seedDb();
     const payload = (await request.json()) as UpdatePhotoPayload;
 
@@ -251,6 +272,11 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    if (!isAdminRequest(request)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    await recordAdminAudit(request, 'photos');
     await seedDb();
     const payload = (await request.json()) as DeletePhotoPayload;
 

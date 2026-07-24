@@ -6,6 +6,11 @@ import SwrProvider from '@/components/providers/SwrProvider';
 export const metadata: Metadata = {
   title: '치매돌봄 리빙랩 통합 성과관리 대시보드',
   description: '치매돌봄 리빙랩 6단계 전 과정을 관리하는 통합 대시보드',
+  robots: {
+    index: false,
+    follow: false,
+    nocache: true,
+  },
 };
 
 export default function RootLayout({

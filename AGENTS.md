@@ -197,7 +197,7 @@ src/
 ---
 
 ```
-ADMIN_TOKEN=livinglab2026
+ADMIN_TOKEN=<32자 이상의 고유 비밀값>
 ANTHROPIC_API_KEY=sk-ant-...   # TASK_10 임팩트 보고서 생성에 필요
 ```
 

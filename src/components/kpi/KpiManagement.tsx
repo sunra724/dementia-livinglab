@@ -292,6 +292,17 @@ export default function KpiManagement({ editable }: KpiManagementProps) {
         </div>
       </section>
 
+      <section className="rounded-[28px] border border-indigo-100 bg-indigo-50/70 px-5 py-4">
+        <p className="text-sm leading-6 text-slate-600">
+          본 대시보드의 참여자·기관·워크숍 지표는 보건복지부 「제5차 치매관리종합계획(2026~2030)」의
+          핵심 목표인 지역사회 치매관리율(2025년 76.4% → 2030년 84.4%) 달성을 위한 현장 실행 지표로
+          설계되었습니다.
+        </p>
+        <p className="mt-2 text-xs leading-5 text-slate-500">
+          출처: 보건복지부, 「제5차 치매관리종합계획(2026~2030)」, 2026.2.12 확정·발표
+        </p>
+      </section>
+
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex items-center gap-2 text-sm font-medium text-slate-500">

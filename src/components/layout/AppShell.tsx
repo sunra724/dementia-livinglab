@@ -8,7 +8,7 @@ interface AppShellProps {
 }
 
 function isDetachedPath(pathname: string) {
-  return pathname === '/admin/login' || /^\/worksheets\/[^/]+$/.test(pathname);
+  return pathname === '/admin/login' || pathname === '/summary' || /^\/worksheets\/[^/]+$/.test(pathname);
 }
 
 export default function AppShell({ children }: AppShellProps) {

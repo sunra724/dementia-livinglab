@@ -29,6 +29,7 @@ interface WorksheetFormProps {
   onChange?: (data: Record<string, unknown>) => void;
   readOnly?: boolean;
   workshopId?: number;
+  allowSensitiveLookups?: boolean;
 }
 
 interface ParticipantsResponse {
@@ -295,21 +296,25 @@ export default function WorksheetForm({
   onChange,
   readOnly = false,
   workshopId,
+  allowSensitiveLookups = false,
 }: WorksheetFormProps) {
   const [internalData, setInternalData] = useState<Record<string, unknown>>(
     initialData ?? getDefaultWorksheetData(templateKey)
   );
   const { data: participantsData } = useSWR<ParticipantsResponse>(
-    templateKey === 'observation_log' ||
-      templateKey === 'persona' ||
-      templateKey === 'journey_map' ||
-      templateKey === 'test_result'
+    allowSensitiveLookups &&
+      (templateKey === 'observation_log' ||
+        templateKey === 'persona' ||
+        templateKey === 'journey_map' ||
+        templateKey === 'test_result')
       ? '/api/participants'
       : null,
     fetcher
   );
   const { data: worksheetData } = useSWR<WorksheetsResponse>(
-    templateKey === 'idea_card' && workshopId ? `/api/worksheets?workshop_id=${workshopId}` : null,
+    allowSensitiveLookups && templateKey === 'idea_card' && workshopId
+      ? `/api/worksheets?workshop_id=${workshopId}`
+      : null,
     fetcher
   );
 

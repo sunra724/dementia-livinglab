@@ -130,6 +130,67 @@ export interface WorksheetToken {
   active: boolean;
 }
 
+export type IssueCategory =
+  | 'mobility'
+  | 'medication'
+  | 'social_isolation'
+  | 'care_burden'
+  | 'service_access'
+  | 'other';
+
+export type IssueStatus =
+  | 'problem_defined'
+  | 'idea_selected'
+  | 'prototype_ready'
+  | 'field_testing'
+  | 'policy_proposed'
+  | 'completed';
+
+export type IssuePriority = 'high' | 'medium' | 'low';
+
+export interface IssueItem {
+  id: number;
+  code: string;
+  title: string;
+  category: IssueCategory;
+  problem_statement: string;
+  status: IssueStatus;
+  priority: IssuePriority;
+  owner_institution_id: number | null;
+  owner_institution_name: string | null;
+  source_worksheet_id: number | null;
+  source_workshop_title: string | null;
+  source_template_key: WorksheetTemplateKey | null;
+  idea_summary: string;
+  prototype_summary: string;
+  test_summary: string;
+  policy_proposal: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IssueInstitutionOption {
+  id: number;
+  name: string;
+}
+
+export interface IssueWorksheetSource {
+  id: number;
+  template_key: WorksheetTemplateKey;
+  workshop_title: string;
+}
+
+export interface InstitutionAggregateSummary {
+  id: number;
+  name: string;
+  type: InstitutionType;
+  mou_signed: boolean;
+  subject_count: number;
+  active_subject_count: number;
+  consent_count: number;
+  staff_count: number;
+}
+
 export interface ObservationItem {
   time: string;
   who: string;

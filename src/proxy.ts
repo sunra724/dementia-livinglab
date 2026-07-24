@@ -1,17 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ADMIN_COOKIE_NAME, isValidAdminToken } from '@/lib/auth';
+import { isAdminRequest } from '@/lib/auth';
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const protectedPagePrefixes = [
+    '/participants',
+    '/workshops',
+    '/budget',
+    '/safety',
+    '/guidebook',
+  ];
+  const requiresAdmin =
+    pathname.startsWith('/admin') ||
+    protectedPagePrefixes.some(
+      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+    );
 
-  if (pathname.startsWith('/admin')) {
+  if (requiresAdmin) {
     if (pathname === '/admin/login') {
       return NextResponse.next();
     }
 
-    const token = request.cookies.get(ADMIN_COOKIE_NAME);
-
-    if (!token || !isValidAdminToken(token.value)) {
+    if (!isAdminRequest(request)) {
       return NextResponse.redirect(new URL('/admin/login', request.url));
     }
   }
@@ -20,5 +30,12 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: '/admin/:path*',
+  matcher: [
+    '/admin/:path*',
+    '/participants/:path*',
+    '/workshops/:path*',
+    '/budget/:path*',
+    '/safety/:path*',
+    '/guidebook/:path*',
+  ],
 };

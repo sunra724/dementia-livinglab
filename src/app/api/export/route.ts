@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isAdminRequest } from '@/lib/auth';
+import { recordAdminAudit } from '@/lib/audit';
 import { dbQuery } from '@/lib/db';
 import { seedDb } from '@/lib/seed';
 
@@ -20,6 +22,11 @@ function toCsv(headers: string[], rows: Array<Record<string, unknown>>) {
 
 export async function GET(request: NextRequest) {
   try {
+    if (!isAdminRequest(request)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    await recordAdminAudit(request, 'export');
     await seedDb();
     const type = request.nextUrl.searchParams.get('type');
 

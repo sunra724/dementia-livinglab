@@ -6,6 +6,7 @@ export interface LocalContextNewsItem {
   date: string;
   badge: string;
   badgeColor: 'yellow' | 'blue';
+  url?: string;
 }
 
 // 출처: 보건복지부·중앙치매센터 「2023년 치매역학조사 및 실태조사」 2025년 3월 발표
@@ -26,7 +27,27 @@ export const NATIONAL_DEMENTIA_STATS = {
   severity_severe: 2.8,
 } as const;
 
+export const DEMENTIA_POLICY_TARGET = {
+  source: '보건복지부, 「제5차 치매관리종합계획(2026~2030)」',
+  published: '2026.2.12 확정·발표',
+  baseline_year: 2025,
+  baseline_rate: 76.4,
+  target_year: 2030,
+  target_rate: 84.4,
+} as const;
+
 export const LOCAL_CONTEXT_NEWS = [
+  {
+    id: 3,
+    institution: '부천의료복지사회적협동조합·부천시 치매안심센터·부천대학교·한국에자이·사이임팩트',
+    title: '부천 치매돌봄 리빙랩 토론회 — 시민과 함께 지역사회 치매 돌봄 미래를 그리다',
+    description:
+      '부천대학교 한길아트홀에서 개최. 2025년 부천시민 100인 리빙랩과 경도인지장애 당사자 공감인터뷰(12명)를 바탕으로, 경도인지장애 단계의 피어서포트(동료지지) 모델을 부천형 치매돌봄 모델로 발전시키는 방안을 논의.',
+    date: '2026-07-22',
+    badge: '토론회',
+    badgeColor: 'blue',
+    url: 'https://www.saiimpact.com/3a54b011-a0ff-80cb-9c64-d4eb79d015d1',
+  },
   {
     id: 1,
     institution: '수성구 치매안심센터',

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import { isAdminRequest } from '@/lib/auth';
+import { recordAdminAudit } from '@/lib/audit';
 import { calculateSroi, formatKRW, type SroiInput, type SroiResult } from '@/lib/sroi';
 import {
   IMPACT_SECTIONS,
@@ -242,6 +244,12 @@ function buildFallbackSection(
 }
 
 export async function POST(request: NextRequest) {
+  if (!isAdminRequest(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  await recordAdminAudit(request, 'impact_generate');
+
   try {
     const payload = (await request.json()) as {
       context?: ImpactContextResponse;

@@ -1,16 +1,14 @@
 import { NextResponse } from 'next/server';
-import { getCachedDashboardData } from '@/lib/dashboard-data';
+import { getCachedPublicDashboardData } from '@/lib/dashboard-data';
 
 export const runtime = 'nodejs';
 export const revalidate = 60;
 
 export async function GET() {
   try {
-    const dashboardData = await getCachedDashboardData();
-
-    return NextResponse.json(dashboardData, {
+    return NextResponse.json(await getCachedPublicDashboardData(), {
       headers: {
-        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
+        'Cache-Control': 'private, no-store, max-age=0, must-revalidate',
       },
     });
   } catch (error) {

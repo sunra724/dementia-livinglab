@@ -22,7 +22,13 @@ export default function AdminLoginPage() {
       });
 
       if (!response.ok) {
-        setErrorMessage(response.status === 401 ? '비밀번호가 올바르지 않습니다.' : '로그인에 실패했습니다.');
+        setErrorMessage(
+          response.status === 401
+            ? '비밀번호가 올바르지 않습니다.'
+            : response.status === 429
+              ? '로그인 시도가 너무 많습니다. 15분 후 다시 시도해 주세요.'
+              : '로그인에 실패했습니다.'
+        );
         return;
       }
 

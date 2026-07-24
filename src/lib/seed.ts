@@ -7,6 +7,10 @@ type CountRow = {
   count: string | number;
 };
 
+function shouldSeedAtRuntime() {
+  return process.env.VERCEL !== '1' || process.env.AUTO_SEED_DB === 'true';
+}
+
 async function hasRows(tableName: string) {
   const result = await dbQueryOne<CountRow>(`SELECT COUNT(*) AS count FROM ${tableName}`);
   return Number(result?.count ?? 0) > 0;
@@ -69,26 +73,26 @@ async function seedParticipants() {
     'participants',
     ['id', 'name', 'role', 'affiliation', 'contact', 'joined_date', 'active', 'notes'],
     [
-      [1, '김민수', 'activist', '경북대학교', '010-1000-0001', '2026-03-01', 1, ''],
-      [2, '이서연', 'activist', '경북대학교', '010-1000-0002', '2026-03-01', 1, ''],
-      [3, '박지훈', 'activist', '경북대학교', '010-1000-0003', '2026-03-01', 1, ''],
-      [4, '최예린', 'activist', '경북대학교', '010-1000-0004', '2026-03-01', 1, ''],
-      [5, '정우진', 'activist', '계명대학교', '010-1000-0005', '2026-03-05', 1, ''],
-      [6, '강하늘', 'activist', '계명대학교', '010-1000-0006', '2026-03-05', 1, ''],
-      [7, '서다미', 'activist', '계명대학교', '010-1000-0007', '2026-03-05', 1, ''],
-      [8, '윤수빈', 'activist', '대구가톨릭대학교', '010-1000-0008', '2026-03-10', 1, ''],
-      [9, '오예준', 'activist', '대구가톨릭대학교', '010-1000-0009', '2026-03-10', 1, ''],
-      [10, '조세아', 'activist', '대구가톨릭대학교', '010-1000-0010', '2026-03-10', 1, ''],
-      [11, '한태윤', 'activist', '영남대학교', '010-1000-0011', '2026-03-15', 1, ''],
-      [12, '문예지', 'activist', '영남대학교', '010-1000-0012', '2026-03-15', 1, ''],
-      [13, '대구센터 담당자', 'institution_staff', '대구치매안심센터', '010-2100-0001', '2026-03-02', 1, ''],
-      [14, '수성센터 담당자', 'institution_staff', '수성구치매안심센터', '010-2100-0002', '2026-03-05', 1, ''],
-      [15, '복지관 담당자', 'institution_staff', '대구사회복지관', '010-2100-0003', '2026-03-10', 1, ''],
-      [16, '간호학과 담당자', 'institution_staff', '경북대학교 간호학과', '010-2100-0004', '2026-03-15', 1, ''],
-      [17, '지원단체 담당자', 'institution_staff', '대구지역사회돌봄협의체', '010-2100-0005', '2026-03-20', 1, ''],
-      [18, '퍼실리테이터 A', 'facilitator', '소이랩', '010-3100-0001', '2026-03-01', 1, ''],
-      [19, '퍼실리테이터 B', 'facilitator', '소이랩', '010-3100-0002', '2026-03-01', 1, ''],
-      [20, '치매 케어 전문가', 'expert', '치매케어연구소', '010-4100-0001', '2026-03-01', 1, ''],
+      [1, '활동가 01', 'activist', '경북대학교', '비공개', '2026-03-01', 1, '데모 데이터'],
+      [2, '활동가 02', 'activist', '경북대학교', '비공개', '2026-03-01', 1, '데모 데이터'],
+      [3, '활동가 03', 'activist', '경북대학교', '비공개', '2026-03-01', 1, '데모 데이터'],
+      [4, '활동가 04', 'activist', '경북대학교', '비공개', '2026-03-01', 1, '데모 데이터'],
+      [5, '활동가 05', 'activist', '계명대학교', '비공개', '2026-03-05', 1, '데모 데이터'],
+      [6, '활동가 06', 'activist', '계명대학교', '비공개', '2026-03-05', 1, '데모 데이터'],
+      [7, '활동가 07', 'activist', '계명대학교', '비공개', '2026-03-05', 1, '데모 데이터'],
+      [8, '활동가 08', 'activist', '대구가톨릭대학교', '비공개', '2026-03-10', 1, '데모 데이터'],
+      [9, '활동가 09', 'activist', '대구가톨릭대학교', '비공개', '2026-03-10', 1, '데모 데이터'],
+      [10, '활동가 10', 'activist', '대구가톨릭대학교', '비공개', '2026-03-10', 1, '데모 데이터'],
+      [11, '활동가 11', 'activist', '영남대학교', '비공개', '2026-03-15', 1, '데모 데이터'],
+      [12, '활동가 12', 'activist', '영남대학교', '비공개', '2026-03-15', 1, '데모 데이터'],
+      [13, '대구센터 담당자', 'institution_staff', '대구치매안심센터', '비공개', '2026-03-02', 1, '데모 데이터'],
+      [14, '수성센터 담당자', 'institution_staff', '수성구치매안심센터', '비공개', '2026-03-05', 1, '데모 데이터'],
+      [15, '복지관 담당자', 'institution_staff', '대구사회복지관', '비공개', '2026-03-10', 1, '데모 데이터'],
+      [16, '간호학과 담당자', 'institution_staff', '경북대학교 간호학과', '비공개', '2026-03-15', 1, '데모 데이터'],
+      [17, '지원단체 담당자', 'institution_staff', '대구지역사회돌봄협의체', '비공개', '2026-03-20', 1, '데모 데이터'],
+      [18, '퍼실리테이터 A', 'facilitator', '소이랩', '비공개', '2026-03-01', 1, '데모 데이터'],
+      [19, '퍼실리테이터 B', 'facilitator', '소이랩', '비공개', '2026-03-01', 1, '데모 데이터'],
+      [20, '치매 케어 전문가', 'expert', '치매케어연구소', '비공개', '2026-03-01', 1, '데모 데이터'],
     ],
     'id'
   );
@@ -242,7 +246,7 @@ async function seedWorksheets() {
         4,
         'hmw',
         'A조',
-        '이현주',
+        '활동가 01',
         'activist',
         JSON.stringify({
           problem_context: '어르신이 외출을 원하지만 이동 과정과 대중교통 이용에 대한 불안이 커 가족 동행이 반복된다.',
@@ -255,7 +259,7 @@ async function seedWorksheets() {
         }),
         '2026-05-14T14:32:00.000Z',
         1,
-        '김소이',
+        '운영관리자',
         '2026-05-15T10:00:00.000Z',
         '질문의 초점이 명확하고 현장 상황이 잘 드러남',
       ],
@@ -265,7 +269,7 @@ async function seedWorksheets() {
         4,
         'persona',
         'A조',
-        '이현주',
+        '활동가 01',
         'activist',
         JSON.stringify({
           subject_code: 'E003',
@@ -288,7 +292,7 @@ async function seedWorksheets() {
         4,
         'hmw',
         'B조',
-        '김민아',
+        '활동가 02',
         'activist',
         JSON.stringify({
           problem_context: '경증 치매 어르신이 약 복용 시간을 자주 놓쳐 가족이 매번 전화로 확인해야 한다.',
@@ -307,6 +311,64 @@ async function seedWorksheets() {
       ],
     ],
     'id'
+  );
+}
+
+async function seedIssues() {
+  await insertRows(
+    'issue_items',
+    [
+      'code',
+      'title',
+      'category',
+      'problem_statement',
+      'status',
+      'priority',
+      'owner_institution_id',
+      'source_worksheet_id',
+      'idea_summary',
+      'prototype_summary',
+      'test_summary',
+      'policy_proposal',
+      'created_at',
+      'updated_at',
+    ],
+    [
+      [
+        'ISSUE-001',
+        '익숙한 동선을 활용한 안전한 일상 외출 지원',
+        'mobility',
+        '경증 치매 어르신이 외출을 원하지만 이동 과정과 대중교통 이용에 대한 불안으로 가족 동행이 반복된다.',
+        'problem_defined',
+        'high',
+        1,
+        1,
+        '익숙한 동선과 심리적 안정감을 중심으로 지원 아이디어를 구체화한다.',
+        '',
+        '',
+        '',
+        '2026-07-24T00:00:00.000Z',
+        '2026-07-24T00:00:00.000Z',
+      ],
+      [
+        'ISSUE-002',
+        '복약 확인 부담을 줄이는 생활 루틴 설계',
+        'medication',
+        '약 복용 시간을 놓치는 일이 반복되어 가족이 매번 전화로 확인해야 하고 돌봄 부담이 커진다.',
+        'problem_defined',
+        'high',
+        2,
+        3,
+        '기억 보조 도구와 기존 생활 루틴을 결합하는 아이디어를 검토한다.',
+        '',
+        '',
+        '',
+        '',
+        '2026-07-24T00:00:00.000Z',
+        '2026-07-24T00:00:00.000Z',
+      ],
+    ],
+    'code'
   );
 }
 
@@ -372,9 +434,9 @@ async function seedSafetyAndRoles() {
     'safety_logs',
     ['id', 'phase', 'workshop_id', 'log_type', 'description', 'recorder', 'severity', 'resolved', 'resolved_note', 'created_at'],
     [
-      [1, 1, 1, 'consent', '전체 참가자 동의서 수령 완료 확인', '김소이', 'info', 1, '완료', '2026-03-25T10:00:00.000Z'],
-      [2, 2, 2, 'anonymization', 'E005 대상자 사진 동의 범위 재확인 필요', '박기찬', 'warning', 1, '동의 범위 재확인 완료', '2026-04-08T11:30:00.000Z'],
-      [3, 2, 2, 'incident', '기관 방문 중 이동 동선 위험 징후로 일시 중단', '이활동', 'critical', 1, '환경 정비 후 안전 확인 완료', '2026-04-15T14:10:00.000Z'],
+      [1, 1, 1, 'consent', '전체 참가자 동의서 수령 완료 확인', '운영관리자', 'info', 1, '완료', '2026-03-25T10:00:00.000Z'],
+      [2, 2, 2, 'anonymization', '대상자 사진 동의 범위 재확인 필요', '안전담당자', 'warning', 1, '동의 범위 재확인 완료', '2026-04-08T11:30:00.000Z'],
+      [3, 2, 2, 'incident', '기관 방문 중 이동 동선 위험 징후로 일시 중단', '현장담당자', 'critical', 1, '환경 정비 후 안전 확인 완료', '2026-04-15T14:10:00.000Z'],
     ],
     'id'
   );
@@ -450,6 +512,7 @@ async function resetSequences() {
       'workshops',
       'worksheet_tokens',
       'worksheet_entries',
+      'issue_items',
       'checklist_items',
       'safety_logs',
       'facilitator_roles',
@@ -462,6 +525,10 @@ async function resetSequences() {
 }
 
 export async function seedDb() {
+  if (!shouldSeedAtRuntime()) {
+    return;
+  }
+
   if (!seedPromise) {
     seedPromise = (async () => {
       const alreadySeeded = await hasRowsIfTableExists('participants');
@@ -477,6 +544,7 @@ export async function seedDb() {
         await seedSubjects();
         await seedWorkshops();
         await seedWorksheets();
+        await seedIssues();
         await seedChecklist();
         await seedSafetyAndRoles();
         await seedMetrics();

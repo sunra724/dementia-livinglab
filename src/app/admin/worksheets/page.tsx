@@ -9,6 +9,7 @@ import { WORKSHOP_TEMPLATE_MAP } from '@/lib/types';
 import WorksheetGallery from '@/components/worksheets/WorksheetGallery';
 import WorksheetEntryDialog from '@/components/worksheets/WorksheetEntryDialog';
 import TokenManager from '@/components/worksheets/TokenManager';
+import IssueTracker from '@/components/worksheets/IssueTracker';
 
 interface WorkshopsResponse {
   workshops: Workshop[];
@@ -164,6 +165,8 @@ export default function AdminWorksheetsPage() {
         </div>
       </section>
 
+      <IssueTracker editable />
+
       <section className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
         <div className="mb-5 flex items-center gap-2">
           <ClipboardCheck className="h-5 w-5 text-orange-500" />
@@ -232,6 +235,7 @@ export default function AdminWorksheetsPage() {
               entry={selectedEntry}
               workshopTitle={workshops.find((workshop) => workshop.id === selectedEntry.workshop_id)?.title ?? '-'}
               onClose={() => setSelectedEntry(null)}
+              allowSensitiveLookups
             />
             {!selectedEntry.reviewed ? (
               <div className="border-t border-slate-200 px-6 py-6">

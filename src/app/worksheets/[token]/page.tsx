@@ -2,12 +2,11 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
+import Link from 'next/link';
 import useSWR from 'swr';
-import type { FieldPhoto, WorksheetContributorRole, WorksheetEntry, WorksheetTemplateKey } from '@/lib/types';
+import type { WorksheetContributorRole, WorksheetEntry, WorksheetTemplateKey } from '@/lib/types';
 import { getDefaultWorksheetData, getWorksheetTemplateLabel } from '@/lib/worksheets';
 import WorksheetForm from '@/components/guidebook/WorksheetForm';
-import PhotoGallery from '@/components/photos/PhotoGallery';
-import PhotoUploader from '@/components/photos/PhotoUploader';
 import WorksheetEntryDialog from '@/components/worksheets/WorksheetEntryDialog';
 
 interface TokenLookupResponse {
@@ -15,10 +14,6 @@ interface TokenLookupResponse {
   workshop: { id: number; title: string; phase: number; scheduled_date: string } | null;
   template_key: WorksheetTemplateKey | null;
   existing_entry: WorksheetEntry | null;
-}
-
-interface PhotosResponse {
-  photos: FieldPhoto[];
 }
 
 const fetcher = async <T,>(url: string) => {
@@ -41,6 +36,7 @@ export default function WorksheetTokenPage() {
   const [submittedEntry, setSubmittedEntry] = useState<WorksheetEntry | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const restoredRef = useRef(false);
 
   useEffect(() => {
@@ -50,10 +46,6 @@ export default function WorksheetTokenPage() {
 
   const { data, error, isLoading } = useSWR<TokenLookupResponse>(
     token ? `/api/worksheets?token=${token}` : null,
-    fetcher
-  );
-  const { data: photoData, mutate: mutatePhotos } = useSWR<PhotosResponse>(
-    submittedEntry ? `/api/photos?worksheet_id=${submittedEntry.id}` : null,
     fetcher
   );
 
@@ -144,7 +136,14 @@ export default function WorksheetTokenPage() {
           group_name: groupName.trim(),
           filled_by_name: authorName.trim(),
           filled_by_role: role,
-          content_json: JSON.stringify(formData),
+          content_json: JSON.stringify({
+            ...formData,
+            _privacy_notice: {
+              accepted: privacyAccepted,
+              accepted_at: new Date().toISOString(),
+              version: '2026-07-24',
+            },
+          }),
         }),
       });
 
@@ -197,13 +196,6 @@ export default function WorksheetTokenPage() {
               </button>
             </div>
           </div>
-          <div className="space-y-4 rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900">첨부된 현장 사진</h3>
-              <p className="mt-1 text-sm text-slate-500">이 워크시트와 연결된 사진입니다.</p>
-            </div>
-            <PhotoGallery photos={photoData?.photos ?? []} />
-          </div>
         </div>
         {showPreview ? (
           <WorksheetEntryDialog
@@ -238,16 +230,6 @@ export default function WorksheetTokenPage() {
               </button>
             </div>
           </div>
-          <div className="space-y-4">
-            <PhotoUploader
-              worksheetId={submittedEntry.id}
-              onUpload={() => {
-                void mutatePhotos();
-              }}
-              maxFiles={5}
-            />
-            <PhotoGallery photos={photoData?.photos ?? []} />
-          </div>
         </div>
         {showPreview ? (
           <WorksheetEntryDialog
@@ -267,13 +249,31 @@ export default function WorksheetTokenPage() {
           워크숍 [{data.workshop.id}] {data.workshop.title} ({data.workshop.scheduled_date})
         </p>
         <h2 className="mt-3 text-3xl font-bold text-slate-900">{getWorksheetTemplateLabel(data.template_key)}</h2>
-        <p className="mt-2 text-sm text-slate-600">작성자 정보를 먼저 입력한 뒤 워크시트를 제출해 주세요.</p>
+        <p className="mt-2 text-sm text-slate-600">
+          실명 대신 활동명 또는 역할 코드를 사용하고, 대상자를 알아볼 수 있는 정보는 입력하지 마세요.
+        </p>
+      </section>
+
+      <section className="rounded-[32px] border border-amber-200 bg-amber-50 p-6">
+        <h3 className="text-base font-semibold text-amber-900">작성 전 개인정보·윤리 안내</h3>
+        <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-amber-900">
+          <li>실명, 전화번호, 주소, 얼굴 사진과 대상자 코드 등 식별 가능 정보는 입력하지 않습니다.</li>
+          <li>진단명·병력·약물 등 건강정보 원문 대신 관찰 결과를 범주화해 기록합니다.</li>
+          <li>당사자의 동의 없이 직접 인용문이나 구체적인 가족·생활사를 작성하지 않습니다.</li>
+        </ul>
+        <p className="mt-3 text-sm text-amber-900">
+          자세한 내용은{' '}
+          <Link href="/privacy" target="_blank" className="font-semibold underline">
+            개인정보 처리 안내
+          </Link>
+          를 확인해 주세요.
+        </p>
       </section>
 
       <section className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
         <div className="grid gap-4 md:grid-cols-2">
           <label className="space-y-2">
-            <span className="text-sm font-semibold text-slate-800">이름 *</span>
+            <span className="text-sm font-semibold text-slate-800">활동명 또는 역할 코드 *</span>
             <input
               type="text"
               value={authorName}
@@ -318,7 +318,7 @@ export default function WorksheetTokenPage() {
 
         {!authorName.trim() ? (
           <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-            이름을 먼저 입력해 주세요. 제출 시 작성자 정보로 사용됩니다.
+            실명이 아닌 활동명 또는 역할 코드를 입력해 주세요.
           </div>
         ) : null}
       </section>
@@ -331,6 +331,19 @@ export default function WorksheetTokenPage() {
         workshopId={data.workshop.id}
       />
 
+      <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-700">
+        <input
+          type="checkbox"
+          checked={privacyAccepted}
+          onChange={(event) => setPrivacyAccepted(event.target.checked)}
+          className="mt-1 h-4 w-4 rounded border-slate-300"
+        />
+        <span>
+          위 개인정보·윤리 안내를 확인했으며, 식별 가능한 개인정보와 불필요한 건강정보를
+          입력하지 않았습니다.
+        </span>
+      </label>
+
       <div className="flex flex-wrap justify-end gap-3">
         <button
           type="button"
@@ -342,7 +355,7 @@ export default function WorksheetTokenPage() {
         <button
           type="button"
           onClick={() => void submitWorksheet()}
-          disabled={!authorName.trim() || saving}
+          disabled={!authorName.trim() || !privacyAccepted || saving}
           className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white disabled:opacity-40"
         >
           {saving ? '제출 중...' : '최종 제출'}

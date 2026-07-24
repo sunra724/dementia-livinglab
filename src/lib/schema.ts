@@ -96,6 +96,26 @@ async function createWorksheetTables() {
       review_note TEXT NOT NULL DEFAULT ''
     )
   `);
+
+  await dbExecute(`
+    CREATE TABLE IF NOT EXISTS issue_items (
+      id SERIAL PRIMARY KEY,
+      code TEXT NOT NULL UNIQUE,
+      title TEXT NOT NULL,
+      category TEXT NOT NULL,
+      problem_statement TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'problem_defined',
+      priority TEXT NOT NULL DEFAULT 'medium',
+      owner_institution_id INTEGER REFERENCES institutions(id),
+      source_worksheet_id INTEGER REFERENCES worksheet_entries(id),
+      idea_summary TEXT NOT NULL DEFAULT '',
+      prototype_summary TEXT NOT NULL DEFAULT '',
+      test_summary TEXT NOT NULL DEFAULT '',
+      policy_proposal TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `);
 }
 
 async function createSafetyTables() {
@@ -200,6 +220,23 @@ async function createManagementTables() {
       status TEXT NOT NULL,
       notes TEXT DEFAULT ''
     )
+  `);
+
+  await dbExecute(`
+    CREATE TABLE IF NOT EXISTS admin_audit_logs (
+      id SERIAL PRIMARY KEY,
+      session_fingerprint TEXT NOT NULL,
+      ip_fingerprint TEXT NOT NULL,
+      method TEXT NOT NULL,
+      resource TEXT NOT NULL,
+      query_keys TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL
+    )
+  `);
+
+  await dbExecute(`
+    CREATE INDEX IF NOT EXISTS idx_admin_audit_logs_created_at
+    ON admin_audit_logs(created_at)
   `);
 }
 

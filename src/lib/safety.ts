@@ -90,10 +90,6 @@ export function getBlockingGateForPhase(
   return previousGate && !previousGate.can_proceed ? previousGate : null;
 }
 
-export function getPhotoUrl(photo: Pick<FieldPhoto, 'filename'>) {
-  if (photo.filename.startsWith('https://') || photo.filename.startsWith('http://') || photo.filename.startsWith('/')) {
-    return photo.filename;
-  }
-
-  return `/uploads/photos/${photo.filename}`;
+export function getPhotoUrl(photo: Pick<FieldPhoto, 'id'>) {
+  return `/api/photos/file/${photo.id}`;
 }

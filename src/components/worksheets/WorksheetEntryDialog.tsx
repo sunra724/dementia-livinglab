@@ -10,6 +10,7 @@ interface WorksheetEntryDialogProps {
   workshopTitle: string;
   onClose: () => void;
   footer?: React.ReactNode;
+  allowSensitiveLookups?: boolean;
 }
 
 export default function WorksheetEntryDialog({
@@ -17,6 +18,7 @@ export default function WorksheetEntryDialog({
   workshopTitle,
   onClose,
   footer,
+  allowSensitiveLookups = false,
 }: WorksheetEntryDialogProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-6">
@@ -44,6 +46,7 @@ export default function WorksheetEntryDialog({
             initialData={parseWorksheetContent(entry.template_key, entry.content_json)}
             readOnly
             workshopId={entry.workshop_id}
+            allowSensitiveLookups={allowSensitiveLookups}
           />
           {footer ? <div className="border-t border-slate-200 pt-6">{footer}</div> : null}
         </div>

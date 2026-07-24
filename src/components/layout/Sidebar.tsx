@@ -5,15 +5,13 @@ import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import {
   ClipboardCheck,
+  FileLock2,
   LayoutDashboard,
   Megaphone,
   Menu,
-  NotebookTabs,
+  Presentation,
   Shield,
-  ShieldCheck,
   Sparkles,
-  Users,
-  Wallet,
   X,
 } from 'lucide-react';
 
@@ -26,15 +24,12 @@ interface MenuItem {
 
 const menuItems: MenuItem[] = [
   { href: '/', label: '종합 대시보드', icon: LayoutDashboard },
-  { href: '/participants', label: '참가자·기관·대상자', icon: Users },
-  { href: '/workshops', label: '워크숍', icon: NotebookTabs },
   { href: '/worksheets', label: '워크시트', icon: ClipboardCheck },
   { href: '/kpi', label: 'KPI 성과관리', icon: LayoutDashboard },
-  { href: '/budget', label: '사업비 관리', icon: Wallet },
   { href: '/promotion', label: '홍보 관리', icon: Megaphone },
-  { href: '/safety', label: '안전·윤리', icon: ShieldCheck },
-  { href: '/guidebook', label: '가이드북 체크리스트', icon: NotebookTabs },
   { href: '/impact-report', label: '임팩트 보고서', icon: Sparkles },
+  { href: '/summary', label: '발표용 요약', icon: Presentation },
+  { href: '/privacy', label: '개인정보 처리 안내', icon: FileLock2 },
   { href: '/admin', label: '관리자', icon: Shield, admin: true },
   { href: '/admin/impact-report', label: '임팩트 보고서', icon: Sparkles, admin: true },
 ];

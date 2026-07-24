@@ -237,7 +237,8 @@ export default function ImpactReportWorkspace({
               </div>
             ) : (
               <>
-                <div className="no-print mb-5 flex flex-wrap gap-2">
+                {editable ? (
+                  <div className="no-print mb-5 flex flex-wrap gap-2">
                   <button
                     type="button"
                     onClick={() => void generateAll()}
@@ -262,7 +263,13 @@ export default function ImpactReportWorkspace({
                       PDF 인쇄
                     </button>
                   ) : null}
-                </div>
+                  </div>
+                ) : (
+                  <div className="no-print mb-5 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-800">
+                    공개 화면은 비식별 집계값만 표시합니다. AI 보고서 생성과 세부 자료 열람은
+                    관리자에게만 제공됩니다.
+                  </div>
+                )}
 
                 <div id="print-area">
                   <div
@@ -347,18 +354,20 @@ export default function ImpactReportWorkspace({
                                 <ChevronDown size={14} />
                               )}
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => void generateSection(section.key)}
-                              disabled={Boolean(generating) || allGenerating}
-                              className="rounded-lg border border-slate-200 px-2.5 py-1 text-[11px] text-slate-600 hover:border-slate-300 disabled:opacity-40"
-                            >
-                              {generating === section.key
-                                ? '생성 중...'
-                                : generated[section.key]
-                                  ? '재생성'
-                                  : '생성'}
-                            </button>
+                            {editable ? (
+                              <button
+                                type="button"
+                                onClick={() => void generateSection(section.key)}
+                                disabled={Boolean(generating) || allGenerating}
+                                className="rounded-lg border border-slate-200 px-2.5 py-1 text-[11px] text-slate-600 hover:border-slate-300 disabled:opacity-40"
+                              >
+                                {generating === section.key
+                                  ? '생성 중...'
+                                  : generated[section.key]
+                                    ? '재생성'
+                                    : '생성'}
+                              </button>
+                            ) : null}
                           </div>
                         </div>
 

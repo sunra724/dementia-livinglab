@@ -30,8 +30,8 @@ export function getSql() {
       max: 1,
       prepare: false,
       connect_timeout: 10,
-      idle_timeout: 1,
-      max_lifetime: 60,
+      idle_timeout: 20,
+      max_lifetime: 300,
       onnotice: () => undefined,
       ssl: shouldUseSsl(databaseUrl) ? 'require' : undefined,
     });

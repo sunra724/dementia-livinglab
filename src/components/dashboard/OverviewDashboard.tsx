@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
 import { format, parseISO } from 'date-fns';
 import {
@@ -12,6 +12,7 @@ import {
   ExternalLink,
   FolderKanban,
   Megaphone,
+  Presentation,
   ShieldCheck,
   Users,
   Wallet,
@@ -21,8 +22,8 @@ import KpiCard from '@/components/dashboard/KpiCard';
 import ProgressBar from '@/components/dashboard/ProgressBar';
 import ActivityCalendar, { type ActivityCalendarEvent } from '@/components/timeline/ActivityCalendar';
 import PhaseTimeline from '@/components/timeline/PhaseTimeline';
-import { LOCAL_CONTEXT_NEWS, NATIONAL_DEMENTIA_STATS } from '@/lib/dementia-stats';
-import type { DashboardResponse } from '@/lib/dashboard-data';
+import { DEMENTIA_POLICY_TARGET, LOCAL_CONTEXT_NEWS, NATIONAL_DEMENTIA_STATS } from '@/lib/dementia-stats';
+import type { PublicDashboardResponse } from '@/lib/dashboard-data';
 import { formatLargeNumber } from '@/lib/format';
 import type {
   LivingLabPhase,
@@ -30,11 +31,11 @@ import type {
   PromotionChannel,
 } from '@/lib/types';
 
-type DashboardMode = 'view' | 'admin';
+type DashboardMode = 'view' | 'admin' | 'summary';
 
 interface OverviewDashboardProps {
   mode: DashboardMode;
-  initialData?: DashboardResponse;
+  initialData?: PublicDashboardResponse;
 }
 
 interface SummaryCard {
@@ -158,6 +159,7 @@ function DashboardError({ onRetry }: { onRetry: () => void }) {
 
 export default function OverviewDashboard({ mode, initialData }: OverviewDashboardProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const now = new Date();
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth() + 1;
@@ -167,21 +169,17 @@ export default function OverviewDashboard({ mode, initialData }: OverviewDashboa
     error: dashboardError,
     isLoading: dashboardLoading,
     mutate: mutateDashboard,
-  } = useSWR<DashboardResponse>('/api/dashboard', fetcher, {
+  } = useSWR<PublicDashboardResponse>('/api/dashboard', fetcher, {
     dedupingInterval: 60_000,
     fallbackData: initialData,
     revalidateOnMount: !initialData,
   });
 
-  const isLoading = dashboardLoading;
-  const hasError = Boolean(dashboardError);
-  const hasAnyData = Boolean(dashboardData);
-
-  if (isLoading && !hasAnyData) {
+  if (dashboardLoading && !dashboardData) {
     return <DashboardLoading />;
   }
 
-  if (hasError && !hasAnyData) {
+  if (dashboardError && !dashboardData) {
     return (
       <DashboardError
         onRetry={() => {
@@ -191,15 +189,45 @@ export default function OverviewDashboard({ mode, initialData }: OverviewDashboa
     );
   }
 
-  const kpiItems = dashboardData?.kpiItems ?? [];
-  const workshops = dashboardData?.workshopPayload.workshops ?? [];
-  const checklistItems = dashboardData?.checklistItems ?? [];
-  const promotionItems = dashboardData?.promotionItems ?? [];
-  const budgetItems = dashboardData?.budgetItems ?? [];
-  const safetyData = dashboardData?.safetyData ?? {
+  const kpiItems = dashboardData?.kpis ?? [];
+  const workshops = dashboardData?.workshops ?? [];
+  const checklistItems = dashboardData?.checklist ?? [];
+  const promotionItems = dashboardData?.promotions ?? [];
+  const budgetItems = dashboardData?.budget ?? [];
+  const safetyData = dashboardData?.safety ?? {
     gate_status: [],
   };
-  const subjects = dashboardData?.participantsPayload.subjects ?? [];
+  const subjectSeverityCounts = dashboardData?.subject_severity_counts ?? {
+    mild: 0,
+    moderate: 0,
+    severe: 0,
+  };
+  const institutionTotals = dashboardData?.institution_totals ?? {
+    mou_count: 0,
+    active_subject_count: 0,
+    consent_count: 0,
+    staff_count: 0,
+  };
+  const institutionSummaries = dashboardData?.institutions ?? [];
+  const selectedInstitutionId = Number(searchParams.get('institution') ?? 0);
+  const selectedInstitution =
+    mode === 'summary'
+      ? institutionSummaries.find((institution) => institution.id === selectedInstitutionId) ?? null
+      : null;
+  const institutionViewStats = {
+    mouCount: selectedInstitution
+      ? Number(selectedInstitution.mou_signed)
+      : institutionTotals.mou_count,
+    activeSubjectCount: selectedInstitution
+      ? selectedInstitution.active_subject_count
+      : institutionTotals.active_subject_count,
+    consentCount: selectedInstitution
+      ? selectedInstitution.consent_count
+      : institutionTotals.consent_count,
+    staffCount: selectedInstitution
+      ? selectedInstitution.staff_count
+      : institutionTotals.staff_count,
+  };
   const projectMonth = calculateProjectMonth(now);
   const currentMonthWorkshops = workshops.filter((workshop) =>
     isSameYearMonth(workshop.scheduled_date, currentYear, currentMonth)
@@ -274,26 +302,11 @@ export default function OverviewDashboard({ mode, initialData }: OverviewDashboa
     })
     .slice(0, 3);
 
-  const dementiaSeverityCounts = subjects.reduce<Record<'경도' | '중등도' | '중증', number>>(
-    (result, subject) => {
-      if (subject.dementia_stage === 'mild_cognitive' || subject.dementia_stage === 'mild') {
-        result.경도 += 1;
-        return result;
-      }
-
-      if (subject.dementia_stage === 'moderate') {
-        result.중등도 += 1;
-        return result;
-      }
-
-      if (subject.dementia_stage === 'severe') {
-        result.중증 += 1;
-      }
-
-      return result;
-    },
-    { 경도: 0, 중등도: 0, 중증: 0 }
-  );
+  const dementiaSeverityCounts = {
+    경도: subjectSeverityCounts.mild,
+    중등도: subjectSeverityCounts.moderate,
+    중증: subjectSeverityCounts.severe,
+  };
   const dementiaSubjectsTotal = Object.values(dementiaSeverityCounts).reduce((sum, value) => sum + value, 0);
   const dementiaChartData = [
     {
@@ -332,6 +345,11 @@ export default function OverviewDashboard({ mode, initialData }: OverviewDashboa
       value: `${formatLargeNumber(NATIONAL_DEMENTIA_STATS.cost_per_patient)} 원`,
       title: '1인당 연간 관리비용',
       description: `국가 총 ${NATIONAL_DEMENTIA_STATS.national_total_cost}조 원`,
+    },
+    {
+      value: `${DEMENTIA_POLICY_TARGET.target_rate}%`,
+      title: `${DEMENTIA_POLICY_TARGET.target_year}년 지역사회 치매관리율 목표`,
+      description: `${DEMENTIA_POLICY_TARGET.baseline_year}년 ${DEMENTIA_POLICY_TARGET.baseline_rate}% 대비 상향`,
     },
   ] as const;
 
@@ -393,21 +411,35 @@ export default function OverviewDashboard({ mode, initialData }: OverviewDashboa
   };
 
   return (
-    <div className="space-y-6 p-6 pt-20 md:pt-6">
+    <div
+      className={
+        mode === 'summary'
+          ? 'mx-auto max-w-[1600px] space-y-10 p-6 sm:p-10 xl:p-14 [&_h2]:text-3xl [&_h3]:text-lg'
+          : 'space-y-6 p-6 pt-20 md:pt-6'
+      }
+    >
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div className="space-y-3">
           <div className="inline-flex items-center gap-2 rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
-            통합 성과관리 대시보드
+            {mode === 'summary' ? '발표·데모용 성과 요약' : '통합 성과관리 대시보드'}
           </div>
           <div>
-            <h1 className="text-3xl font-semibold tracking-tight text-slate-950">
-              치매돌봄 리빙랩 통합 성과관리 대시보드
+            <h1
+              className={`font-semibold tracking-tight text-slate-950 ${
+                mode === 'summary' ? 'text-4xl xl:text-5xl' : 'text-3xl'
+              }`}
+            >
+              {mode === 'summary'
+                ? '치매돌봄 리빙랩 핵심 성과 요약'
+                : '치매돌봄 리빙랩 통합 성과관리 대시보드'}
             </h1>
-            <p className="mt-2 text-sm text-slate-600">
-              지역사회와 대학, 치매 당사자와 가족 참여기관이 함께 만드는 리빙랩의 전 과정을 한 화면에서 확인합니다.
+            <p className={`mt-2 text-slate-600 ${mode === 'summary' ? 'text-lg leading-8' : 'text-sm'}`}>
+              {mode === 'summary'
+                ? '발주기관과 협력기관이 핵심 성과, 정책 연계 근거, 지역 치매돌봄 동향을 한눈에 확인하는 읽기 전용 화면입니다.'
+                : '지역사회와 대학, 치매 당사자와 가족 참여기관이 함께 만드는 리빙랩의 전 과정을 한 화면에서 확인합니다.'}
             </p>
           </div>
-          <div className="flex flex-wrap gap-3 text-sm text-slate-500">
+          <div className={`flex flex-wrap gap-3 text-slate-500 ${mode === 'summary' ? 'text-base' : 'text-sm'}`}>
             <span>사업기간: 2026.03 ~ 2026.11</span>
             <span>현재: {projectMonth}개월차</span>
             <span>기준일: {format(now, 'yyyy.MM.dd')}</span>
@@ -416,14 +448,23 @@ export default function OverviewDashboard({ mode, initialData }: OverviewDashboa
 
         <div className="flex flex-wrap gap-2">
           {mode === 'view' ? (
-            <Link
-              href="/admin"
-              className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-700"
-            >
-              관리자 모드
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          ) : (
+            <>
+              <Link
+                href="/summary"
+                className="inline-flex items-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-700 transition hover:bg-blue-100"
+              >
+                <Presentation className="h-4 w-4" />
+                발표용 요약
+              </Link>
+              <Link
+                href="/admin"
+                className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-700"
+              >
+                관리자 모드
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </>
+          ) : mode === 'admin' ? (
             <>
               <a
                 href="/api/export?type=kpi"
@@ -447,72 +488,158 @@ export default function OverviewDashboard({ mode, initialData }: OverviewDashboa
                 참가자 CSV
               </a>
             </>
-          )}
+          ) : null}
         </div>
       </div>
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
-        <div className="rounded-3xl border border-slate-200 bg-white p-6">
-          <p className="text-sm font-medium text-slate-500">사업 개요</p>
-          <h2 className="mt-2 text-2xl font-semibold text-slate-950">치매돌봄 리빙랩 6단계 통합 운영</h2>
-          <p className="mt-4 text-sm leading-6 text-slate-600">
-            협동조합 소이랩이 준비 단계부터 확산까지의 전 과정을 운영하며, 참여기관과 함께 현장 기반 문제 발견,
-            아이디어 도출, 프로토타입 설계, 테스트, 확산 전략까지 연결합니다.
-          </p>
-
-          <div className="mt-6 grid gap-4 md:grid-cols-3">
-            <div className="rounded-2xl bg-slate-50 p-4">
-              <p className="text-sm text-slate-500">현재 단계</p>
-              <p className="mt-2 text-lg font-semibold text-slate-900">
-                {currentPhase}단계 {phaseTitles[currentPhase]}
-              </p>
-            </div>
-            <div className="rounded-2xl bg-slate-50 p-4">
-              <p className="text-sm text-slate-500">누적 워크숍</p>
-              <p className="mt-2 text-lg font-semibold text-slate-900">{workshops.length}건</p>
-            </div>
-            <div className="rounded-2xl bg-slate-50 p-4">
-              <p className="text-sm text-slate-500">체크리스트 완료</p>
-              <p className="mt-2 text-lg font-semibold text-slate-900">
-                {checklistItems.filter((item) => item.completed).length}건
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-3xl border border-slate-200 bg-white p-6">
-          <div className="flex items-start justify-between gap-4">
+      {mode === 'summary' ? (
+        <section className="rounded-3xl border border-blue-200 bg-white p-8 shadow-sm">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <p className="text-sm font-medium text-slate-500">리빙랩 단계 진행</p>
-              <h2 className="mt-2 text-xl font-semibold text-slate-950">
-                현재: {currentPhase}단계 {phaseTitles[currentPhase]}
+              <p className="text-sm font-semibold text-blue-700">기관별 성과 보기</p>
+              <h2 className="mt-2 text-2xl font-semibold text-slate-950">
+                {selectedInstitution?.name ?? '전체 참여기관'} 요약
               </h2>
+              <p className="mt-2 text-base leading-7 text-slate-600">
+                개인 식별정보 없이 기관에 연결된 참여 현황만 집계해 발주기관·협력기관 공유용으로 제공합니다.
+              </p>
             </div>
-            {mode === 'view' ? (
-              <Link
-                href={`/guidebook?phase=${currentPhase}`}
-                className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200"
+            <label className="min-w-72 space-y-2">
+              <span className="block text-sm font-semibold text-slate-700">기관 선택</span>
+              <select
+                value={selectedInstitution?.id ?? ''}
+                onChange={(event) => {
+                  const institutionId = event.target.value;
+                  router.replace(
+                    institutionId ? `/summary?institution=${institutionId}` : '/summary',
+                    { scroll: false }
+                  );
+                }}
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-700"
               >
-                단계 상세 보기
-              </Link>
-            ) : null}
+                <option value="">전체 참여기관</option>
+                {institutionSummaries.map((institution) => (
+                  <option key={institution.id} value={institution.id}>
+                    {institution.name}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
 
-          <div className="mt-6">
-            <PhaseTimeline
-              currentPhase={currentPhase}
-              phaseStatuses={phaseStatuses}
-              gateResults={safetyData.gate_status}
-              onPhaseClick={handlePhaseClick}
-            />
+          <div className="mt-7 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              {
+                label: 'MOU 체결',
+                value: selectedInstitution
+                  ? selectedInstitution.mou_signed
+                    ? '체결'
+                    : '미체결'
+                  : `${institutionViewStats.mouCount}개소`,
+                note: selectedInstitution ? '기관 협약 상태' : '전체 참여기관 기준',
+              },
+              {
+                label: '활동 중 경험전문가',
+                value:
+                  institutionViewStats.activeSubjectCount < 0
+                    ? '5명 미만'
+                    : `${institutionViewStats.activeSubjectCount}명`,
+                note:
+                  institutionViewStats.activeSubjectCount < 0
+                    ? '소수집단 재식별 방지를 위한 구간 표시'
+                    : '중도 이탈 제외 비식별 집계',
+              },
+              {
+                label: '동의 절차 완료',
+                value:
+                  institutionViewStats.consentCount < 0
+                    ? '비공개'
+                    : `${institutionViewStats.consentCount}명`,
+                note:
+                  institutionViewStats.consentCount < 0
+                    ? '기관별 소수집단 값은 공개하지 않음'
+                    : '연구·참여 동의 확인 기준',
+              },
+              {
+                label: '기관 담당자',
+                value: `${institutionViewStats.staffCount}명`,
+                note: '활성 기관 담당자 집계',
+              },
+            ].map((card) => (
+              <div key={card.label} className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                <p className="text-sm font-medium text-slate-500">{card.label}</p>
+                <p className="mt-3 text-3xl font-semibold text-slate-950">{card.value}</p>
+                <p className="mt-2 text-sm text-slate-500">{card.note}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {mode !== 'summary' ? (
+        <section className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+          <div className="rounded-3xl border border-slate-200 bg-white p-6">
+            <p className="text-sm font-medium text-slate-500">사업 개요</p>
+            <h2 className="mt-2 text-2xl font-semibold text-slate-950">치매돌봄 리빙랩 6단계 통합 운영</h2>
+            <p className="mt-4 text-sm leading-6 text-slate-600">
+              협동조합 소이랩이 준비 단계부터 확산까지의 전 과정을 운영하며, 참여기관과 함께 현장 기반 문제 발견,
+              아이디어 도출, 프로토타입 설계, 테스트, 확산 전략까지 연결합니다.
+            </p>
+
+            <div className="mt-6 grid gap-4 md:grid-cols-3">
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-sm text-slate-500">현재 단계</p>
+                <p className="mt-2 text-lg font-semibold text-slate-900">
+                  {currentPhase}단계 {phaseTitles[currentPhase]}
+                </p>
+              </div>
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-sm text-slate-500">누적 워크숍</p>
+                <p className="mt-2 text-lg font-semibold text-slate-900">{workshops.length}건</p>
+              </div>
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-sm text-slate-500">체크리스트 완료</p>
+                <p className="mt-2 text-lg font-semibold text-slate-900">
+                  {checklistItems.filter((item) => item.completed).length}건
+                </p>
+              </div>
+            </div>
           </div>
 
-          <div className="mt-6 rounded-2xl bg-slate-50 p-4">
-            <p className="text-sm font-medium text-slate-500">현재 단계 설명</p>
-            <p className="mt-2 text-sm leading-6 text-slate-700">{phaseDescriptions[currentPhase]}</p>
+          <div className="rounded-3xl border border-slate-200 bg-white p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-slate-500">리빙랩 단계 진행</p>
+                <h2 className="mt-2 text-xl font-semibold text-slate-950">
+                  현재: {currentPhase}단계 {phaseTitles[currentPhase]}
+                </h2>
+              </div>
+              {mode === 'view' ? (
+                <Link
+                  href={`/guidebook?phase=${currentPhase}`}
+                  className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200"
+                >
+                  단계 상세 보기
+                </Link>
+              ) : null}
+            </div>
+
+            <div className="mt-6">
+              <PhaseTimeline
+                currentPhase={currentPhase}
+                phaseStatuses={phaseStatuses}
+                gateResults={safetyData.gate_status}
+                onPhaseClick={handlePhaseClick}
+              />
+            </div>
+
+            <div className="mt-6 rounded-2xl bg-slate-50 p-4">
+              <p className="text-sm font-medium text-slate-500">현재 단계 설명</p>
+              <p className="mt-2 text-sm leading-6 text-slate-700">{phaseDescriptions[currentPhase]}</p>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      ) : null}
 
       {mode === 'admin' ? (
         <section className="rounded-3xl border border-slate-200 bg-white p-6">
@@ -538,12 +665,26 @@ export default function OverviewDashboard({ mode, initialData }: OverviewDashboa
         </section>
       ) : null}
 
-      <section className="rounded-3xl border border-slate-200 bg-white p-6">
+      <section
+        className={`rounded-3xl border border-slate-200 bg-white ${
+          mode === 'summary' ? 'p-8 shadow-sm' : 'p-6'
+        }`}
+      >
         <div className="mb-4">
           <p className="text-sm font-medium text-slate-500">핵심 KPI</p>
           <h2 className="mt-2 text-xl font-semibold text-slate-950">통합 성과 지표 9개</h2>
         </div>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="mb-5 rounded-2xl border border-indigo-100 bg-indigo-50/70 px-4 py-4">
+          <p className="text-sm leading-6 text-slate-600">
+            본 대시보드의 참여자·기관·워크숍 지표는 보건복지부 「제5차 치매관리종합계획(2026~2030)」의
+            핵심 목표인 지역사회 치매관리율(2025년 76.4% → 2030년 84.4%) 달성을 위한 현장 실행 지표로
+            설계되었습니다.
+          </p>
+          <p className="mt-2 text-xs leading-5 text-slate-500">
+            출처: 보건복지부, 「제5차 치매관리종합계획(2026~2030)」, 2026.2.12 확정·발표
+          </p>
+        </div>
+        <div className={`grid md:grid-cols-2 xl:grid-cols-3 ${mode === 'summary' ? 'gap-6' : 'gap-4'}`}>
           {kpiItems.map((item) => (
             <KpiCard
               key={item.id}
@@ -559,7 +700,8 @@ export default function OverviewDashboard({ mode, initialData }: OverviewDashboa
         </div>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+      {mode !== 'summary' ? (
+        <section className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
         <div className="space-y-6">
           <div className="rounded-3xl border border-slate-200 bg-white p-6">
             <div className="mb-4">
@@ -670,9 +812,14 @@ export default function OverviewDashboard({ mode, initialData }: OverviewDashboa
             </div>
           </div>
         </div>
-      </section>
+        </section>
+      ) : null}
 
-      <section className="rounded-3xl border border-slate-200 bg-white p-6">
+      <section
+        className={`rounded-3xl border border-slate-200 bg-white ${
+          mode === 'summary' ? 'p-8 shadow-sm' : 'p-6'
+        }`}
+      >
         <div className="flex flex-col gap-3 border-b border-slate-200 pb-6">
           <div>
             <p className="text-sm font-medium text-slate-500">치매돌봄 현황</p>
@@ -683,7 +830,7 @@ export default function OverviewDashboard({ mode, initialData }: OverviewDashboa
           </p>
         </div>
 
-        <div className="mt-6 grid gap-4 md:grid-cols-3">
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {dementiaInsightCards.map((card) => (
             <div key={card.title} className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
               <p className="text-3xl font-semibold tracking-tight text-slate-950">{card.value}</p>
@@ -693,8 +840,15 @@ export default function OverviewDashboard({ mode, initialData }: OverviewDashboa
           ))}
         </div>
 
-        <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,1fr)]">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+        <div
+          className={
+            mode === 'summary'
+              ? 'mt-8'
+              : 'mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,1fr)]'
+          }
+        >
+          {mode !== 'summary' ? (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <p className="text-sm font-medium text-slate-500">치매 중증도 분포 비교</p>
@@ -716,15 +870,16 @@ export default function OverviewDashboard({ mode, initialData }: OverviewDashboa
                 </div>
               ))}
             </div>
-          </div>
+            </div>
+          ) : null}
 
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+          <div className={`rounded-2xl border border-slate-200 bg-slate-50 ${mode === 'summary' ? 'p-7' : 'p-5'}`}>
             <div className="mb-4">
               <p className="text-sm font-medium text-slate-500">협력기관 소식</p>
-              <h3 className="mt-2 text-xl font-semibold text-slate-950">대구 지역 치매 돌봄 동향</h3>
+              <h3 className="mt-2 text-xl font-semibold text-slate-950">지역 치매돌봄 동향 · 최근 3건</h3>
             </div>
 
-            <div className="space-y-3">
+            <div className={mode === 'summary' ? 'grid gap-4 lg:grid-cols-3' : 'space-y-3'}>
               {LOCAL_CONTEXT_NEWS.map((news) => (
                 <div key={news.id} className="rounded-2xl border border-slate-200 bg-white p-4">
                   <div className="flex flex-wrap items-center gap-2">
@@ -741,7 +896,20 @@ export default function OverviewDashboard({ mode, initialData }: OverviewDashboa
                   </div>
                   <p className="mt-3 text-sm font-medium leading-6 text-slate-900">{news.title}</p>
                   <p className="mt-2 text-sm leading-6 text-slate-500">{news.description}</p>
-                  <p className="mt-3 text-xs text-slate-400">{formatCompactDate(news.date)}</p>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-xs text-slate-400">{formatCompactDate(news.date)}</p>
+                    {news.url ? (
+                      <a
+                        href={news.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 transition hover:text-blue-500"
+                      >
+                        기사 보기
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                    ) : null}
+                  </div>
                 </div>
               ))}
             </div>
@@ -752,7 +920,13 @@ export default function OverviewDashboard({ mode, initialData }: OverviewDashboa
           <p>
             출처: {NATIONAL_DEMENTIA_STATS.source}, {NATIONAL_DEMENTIA_STATS.published} 발표
           </p>
-          <p className="mt-1">협력기관 소식: 대구일보 (2026.01.02), 수성구 치매안심센터 안내 자료 (2025.04.01)</p>
+          <p className="mt-1">
+            {DEMENTIA_POLICY_TARGET.source}, {DEMENTIA_POLICY_TARGET.published}
+          </p>
+          <p className="mt-1">
+            협력기관 소식: 사이임팩트 (2026.07.22), 대구일보 (2026.01.02), 수성구 치매안심센터 안내 자료
+            (2025.04.01)
+          </p>
         </div>
       </section>
     </div>

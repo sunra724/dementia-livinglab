@@ -54,7 +54,7 @@ cmd /c npm run build
 Required:
 
 ```bash
-ADMIN_TOKEN=livinglab2026
+ADMIN_TOKEN=replace-with-a-unique-32-character-secret
 POSTGRES_URL=postgres://...
 ```
 
@@ -73,8 +73,11 @@ Database priority:
 
 Photo upload behavior:
 
-- When `BLOB_READ_WRITE_TOKEN` is set, photos are stored in Vercel Blob
-- Without that token, local development stores photos under `public/uploads/photos`
+- On Vercel, connect a **Private** Blob store; photo uploads intentionally reject public-store access
+- Connected Blob stores can use system variables such as `BLOB_STORE_ID` and `VERCEL_OIDC_TOKEN`
+- A manual `BLOB_READ_WRITE_TOKEN` is only needed for local uploads to the private Vercel Blob store or older token-based setups
+- Photo files are served only through the authenticated `/api/photos/file/[id]` route
+- Without Blob credentials, local development stores photos outside the public tree under `data/uploads/photos`
 
 ## Seed Data
 
@@ -98,7 +101,7 @@ Recommended setup:
 ```bash
 ADMIN_TOKEN=your-secure-admin-token
 POSTGRES_URL=postgres://...
-BLOB_READ_WRITE_TOKEN=vercel_blob_rw_...
+BLOB_READ_WRITE_TOKEN=vercel_blob_rw_... # optional; not needed when Vercel Blob system variables are enabled
 ANTHROPIC_API_KEY=sk-ant-... # only required for impact report generation
 ```
 

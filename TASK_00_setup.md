@@ -123,7 +123,7 @@ data/*.db
 ### Step 6. .env.local 생성
 
 ```bash
-echo "ADMIN_TOKEN=livinglab2026" > .env.local
+echo "ADMIN_TOKEN=replace-with-a-unique-32-character-secret" > .env.local
 ```
 
 ### Step 7. package.json scripts 추가

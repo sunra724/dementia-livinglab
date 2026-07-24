@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isAdminRequest } from '@/lib/auth';
+import { recordAdminAudit } from '@/lib/audit';
 import { dbQuery, dbQueryOne } from '@/lib/db';
 import { seedDb } from '@/lib/seed';
 import { calculatePhaseGateResults } from '@/lib/safety';
@@ -74,8 +76,13 @@ function isSafetySeverity(value: string): value is SafetySeverity {
   return ['info', 'warning', 'critical'].includes(value);
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    if (!isAdminRequest(request)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    await recordAdminAudit(request, 'safety');
     await seedDb();
 
     const logRows = await dbQuery<SafetyLogRow>('SELECT * FROM safety_logs ORDER BY created_at DESC, id DESC');
@@ -102,6 +109,11 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    if (!isAdminRequest(request)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    await recordAdminAudit(request, 'safety');
     await seedDb();
     const payload = (await request.json()) as CreateSafetyLogPayload;
     const phase = Number(payload.phase);
@@ -145,6 +157,11 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
+    if (!isAdminRequest(request)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    await recordAdminAudit(request, 'safety');
     await seedDb();
     const payload = (await request.json()) as ResolveSafetyLogPayload;
     const resolvedNote = String(payload.resolved_note ?? '').trim();

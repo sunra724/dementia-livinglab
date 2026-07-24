@@ -1,5 +1,7 @@
 import crypto from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
+import { isAdminRequest } from '@/lib/auth';
+import { recordAdminAudit } from '@/lib/audit';
 import { dbQuery, dbQueryOne } from '@/lib/db';
 import { seedDb } from '@/lib/seed';
 import type {
@@ -56,6 +58,22 @@ function toWorksheetEntry(row: WorksheetEntryRow): WorksheetEntry {
   };
 }
 
+function toPublicWorksheetEntry(entry: WorksheetEntry): WorksheetEntry {
+  return {
+    ...entry,
+    token_id: null,
+    group_name: '',
+    filled_by_name: '익명 참여자',
+    content_json: '{}',
+    submitted_at: entry.submitted_at
+      ? `${entry.submitted_at.slice(0, 7)}-01T00:00:00.000Z`
+      : null,
+    reviewed_by: '',
+    reviewed_at: null,
+    review_note: '',
+  };
+}
+
 function toWorksheetToken(row: WorksheetTokenRow): WorksheetToken {
   return {
     ...row,
@@ -68,6 +86,10 @@ function isTokenExpired(expiresAt: string | null) {
 }
 
 async function getTokenByValue(token: string) {
+  if (!/^ws-[A-Za-z0-9_-]{24,}$/.test(token)) {
+    return undefined;
+  }
+
   return dbQueryOne<WorksheetTokenRow>('SELECT * FROM worksheet_tokens WHERE token = ? LIMIT 1', [
     token,
   ]);
@@ -129,12 +151,33 @@ function validateTemplateKey(value: unknown): value is WorksheetTemplateKey {
   );
 }
 
+function hasAcceptedPrivacyNotice(contentJson: unknown): contentJson is string {
+  if (typeof contentJson !== 'string' || contentJson.length > 100_000) {
+    return false;
+  }
+
+  try {
+    const parsed = JSON.parse(contentJson) as Record<string, unknown>;
+    const notice = parsed._privacy_notice;
+
+    return (
+      typeof notice === 'object' &&
+      notice !== null &&
+      'accepted' in notice &&
+      notice.accepted === true
+    );
+  } catch {
+    return false;
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     await seedDb();
     const { searchParams } = new URL(request.url);
     const token = searchParams.get('token');
     const workshopId = searchParams.get('workshop_id');
+    const isPublicView = searchParams.get('view') === 'public';
 
     if (token) {
       const tokenRow = await getTokenByValue(token);
@@ -160,6 +203,14 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    if (!isPublicView && !isAdminRequest(request)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (!isPublicView) {
+      await recordAdminAudit(request, 'worksheets');
+    }
+
     const entryRows = workshopId
       ? await dbQuery<WorksheetEntryRow>(
           'SELECT * FROM worksheet_entries WHERE workshop_id = ? ORDER BY submitted_at DESC, id DESC',
@@ -167,18 +218,27 @@ export async function GET(request: NextRequest) {
         )
       : await dbQuery<WorksheetEntryRow>('SELECT * FROM worksheet_entries ORDER BY submitted_at DESC, id DESC');
 
-    const tokenRows = workshopId
-      ? await dbQuery<WorksheetTokenRow>(
-          'SELECT * FROM worksheet_tokens WHERE workshop_id = ? ORDER BY created_at DESC, id DESC',
-          [Number(workshopId)]
+    const tokenRows = isPublicView
+      ? []
+      : workshopId
+        ? await dbQuery<WorksheetTokenRow>(
+            'SELECT * FROM worksheet_tokens WHERE workshop_id = ? ORDER BY created_at DESC, id DESC',
+            [Number(workshopId)]
+          )
+        : await dbQuery<WorksheetTokenRow>('SELECT * FROM worksheet_tokens ORDER BY created_at DESC, id DESC');
+    const workshops = isPublicView
+      ? await dbQuery<WorkshopSummary>(
+          'SELECT id, title, phase, scheduled_date FROM workshops ORDER BY scheduled_date ASC, id ASC'
         )
-      : await dbQuery<WorksheetTokenRow>('SELECT * FROM worksheet_tokens ORDER BY created_at DESC, id DESC');
+      : [];
 
     const entries = entryRows.map(toWorksheetEntry);
+    const responseEntries = isPublicView ? entries.map(toPublicWorksheetEntry) : entries;
 
     return NextResponse.json({
-      entries,
+      entries: responseEntries,
       tokens: tokenRows.map(toWorksheetToken),
+      workshops,
       stats: buildStats(entries),
     });
   } catch (error) {
@@ -193,6 +253,11 @@ export async function POST(request: NextRequest) {
     const payload = (await request.json()) as PostPayload;
 
     if (payload.action === 'create_token') {
+      if (!isAdminRequest(request)) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+
+      await recordAdminAudit(request, 'worksheet_tokens');
       if (typeof payload.workshop_id !== 'number' || !validateTemplateKey(payload.template_key)) {
         return NextResponse.json({ error: 'Invalid create_token payload' }, { status: 400 });
       }
@@ -200,7 +265,7 @@ export async function POST(request: NextRequest) {
       let token = '';
 
       while (!token) {
-        const candidate = `ws-${crypto.randomBytes(3).toString('hex')}`;
+        const candidate = `ws-${crypto.randomBytes(18).toString('base64url')}`;
         const exists = await dbQueryOne<{ exists: number }>(
           'SELECT 1 AS exists FROM worksheet_tokens WHERE token = ? LIMIT 1',
           [candidate]
@@ -235,6 +300,8 @@ export async function POST(request: NextRequest) {
       if (
         typeof payload.workshop_id !== 'number' ||
         !validateTemplateKey(payload.template_key) ||
+        !payload.token ||
+        !hasAcceptedPrivacyNotice(payload.content_json) ||
         name.length === 0
       ) {
         return NextResponse.json({ error: 'Invalid submit payload' }, { status: 400 });
@@ -309,6 +376,11 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
+    if (!isAdminRequest(request)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    await recordAdminAudit(request, 'worksheets');
     await seedDb();
     const payload = (await request.json()) as PutPayload;
 

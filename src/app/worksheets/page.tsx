@@ -1,21 +1,16 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
 import useSWR from 'swr';
 import { ArrowRight, ShieldCheck } from 'lucide-react';
 import type { Workshop, WorksheetEntry, WorksheetTemplateKey, WorksheetToken } from '@/lib/types';
 import { getWorksheetTemplateLabel } from '@/lib/worksheets';
-import WorksheetGallery from '@/components/worksheets/WorksheetGallery';
-import WorksheetEntryDialog from '@/components/worksheets/WorksheetEntryDialog';
-
-interface WorkshopsResponse {
-  workshops: Workshop[];
-}
+import IssueTracker from '@/components/worksheets/IssueTracker';
 
 interface WorksheetsResponse {
   entries: WorksheetEntry[];
   tokens: WorksheetToken[];
+  workshops: Workshop[];
   stats: {
     total: number;
     submitted: number;
@@ -47,17 +42,14 @@ function countThisMonth(entries: WorksheetEntry[]) {
 }
 
 export default function WorksheetsPage() {
-  const { data: worksheetData, error: worksheetError, isLoading: worksheetLoading, mutate } = useSWR<WorksheetsResponse>(
-    '/api/worksheets',
-    fetcher
-  );
-  const { data: workshopData, error: workshopError, isLoading: workshopLoading } = useSWR<WorkshopsResponse>(
-    '/api/workshops',
-    fetcher
-  );
-  const [selectedEntry, setSelectedEntry] = useState<WorksheetEntry | null>(null);
+  const {
+    data: worksheetData,
+    error: worksheetError,
+    isLoading: worksheetLoading,
+    mutate,
+  } = useSWR<WorksheetsResponse>('/api/worksheets?view=public', fetcher);
 
-  if (worksheetLoading || workshopLoading) {
+  if (worksheetLoading) {
     return (
       <div className="space-y-6 p-6 pt-20 md:pt-6">
         <div className="h-40 animate-pulse rounded-[32px] bg-slate-200" />
@@ -66,7 +58,7 @@ export default function WorksheetsPage() {
     );
   }
 
-  if (worksheetError || workshopError || !worksheetData || !workshopData) {
+  if (worksheetError || !worksheetData) {
     return (
       <div className="p-6 pt-20 md:pt-6">
         <div className="rounded-[32px] border border-red-200 bg-red-50 p-6 text-red-700">
@@ -83,8 +75,7 @@ export default function WorksheetsPage() {
     );
   }
 
-  const { entries, stats } = worksheetData;
-  const workshops = workshopData.workshops;
+  const { entries, stats, workshops } = worksheetData;
   const reviewRate = stats.total ? Math.round((stats.reviewed / stats.total) * 100) : 0;
   const monthlySubmitted = countThisMonth(entries);
   const workshopSummaryRows = workshops.map((workshop) => {
@@ -111,11 +102,12 @@ export default function WorksheetsPage() {
         <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
           <div>
             <span className="inline-flex rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
-              공개 워크시트 갤러리
+              공개용 비식별 성과 화면
             </span>
-            <h1 className="mt-4 text-3xl font-bold text-slate-900">워크시트 열람</h1>
+            <h1 className="mt-4 text-3xl font-bold text-slate-900">워크시트 성과 현황</h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-              제출된 워크시트를 템플릿과 워크숍 기준으로 살펴보고, 각 팀의 관찰과 아이디어를 비교할 수 있습니다.
+              외부 공개 화면에는 제출 건수와 검토 현황, 비식별 이슈만 제공합니다. 작성자 이름,
+              대상자 코드, 건강·돌봄 내용과 원문 워크시트는 관리자만 열람할 수 있습니다.
             </p>
           </div>
           <Link
@@ -143,17 +135,7 @@ export default function WorksheetsPage() {
         ))}
       </section>
 
-      <section className="space-y-5">
-        <div>
-          <h2 className="text-xl font-semibold text-slate-900">워크시트 갤러리</h2>
-          <p className="mt-1 text-sm text-slate-500">카드를 클릭하면 제출 내용을 읽기 전용으로 볼 수 있습니다.</p>
-        </div>
-        <WorksheetGallery
-          entries={entries}
-          workshops={workshops}
-          onCardClick={(entry) => setSelectedEntry(entry)}
-        />
-      </section>
+      <IssueTracker editable={false} />
 
       <section className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
         <div className="mb-5">
@@ -188,13 +170,6 @@ export default function WorksheetsPage() {
         </div>
       </section>
 
-      {selectedEntry ? (
-        <WorksheetEntryDialog
-          entry={selectedEntry}
-          workshopTitle={workshops.find((workshop) => workshop.id === selectedEntry.workshop_id)?.title ?? '-'}
-          onClose={() => setSelectedEntry(null)}
-        />
-      ) : null}
     </div>
   );
 }

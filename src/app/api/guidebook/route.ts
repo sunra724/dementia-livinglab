@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isAdminRequest } from '@/lib/auth';
+import { recordAdminAudit } from '@/lib/audit';
 import { dbQuery, updateById, type DbValue } from '@/lib/db';
 import { seedDb } from '@/lib/seed';
 import type { ChecklistItem, LivingLabPhase } from '@/lib/types';
@@ -91,8 +93,13 @@ function buildChanges(payload: RequestPayload) {
   return nextChanges;
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    if (!isAdminRequest(request)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    await recordAdminAudit(request, 'guidebook');
     await seedDb();
     const items = await dbQuery<ChecklistRow>('SELECT * FROM checklist_items ORDER BY phase ASC, id ASC');
 
@@ -105,6 +112,11 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   try {
+    if (!isAdminRequest(request)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    await recordAdminAudit(request, 'guidebook');
     await seedDb();
     const payload = (await request.json()) as RequestPayload;
 

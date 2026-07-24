@@ -1,38 +1,34 @@
 import { unstable_cache } from 'next/cache';
-import { dbQuery } from '@/lib/db';
+import { dbQueryOne } from '@/lib/db';
 import { calculatePhaseGateResults } from '@/lib/safety';
 import { seedDb } from '@/lib/seed';
 import type {
   BudgetItem,
   ChecklistItem,
+  InstitutionAggregateSummary,
   KpiItem,
+  PhaseGateResult,
   PromotionRecord,
-  Subject,
   Workshop,
-  WorksheetEntry,
 } from '@/lib/types';
 
-export interface DashboardWorkshopsResponse {
+export interface PublicDashboardResponse {
+  kpis: KpiItem[];
   workshops: Workshop[];
-  worksheetEntries: WorksheetEntry[];
-}
-
-export interface DashboardSafetyResponse {
-  gate_status: ReturnType<typeof calculatePhaseGateResults>;
-}
-
-export interface DashboardParticipantsResponse {
-  subjects: Subject[];
-}
-
-export interface DashboardResponse {
-  kpiItems: KpiItem[];
-  workshopPayload: DashboardWorkshopsResponse;
-  checklistItems: ChecklistItem[];
-  promotionItems: PromotionRecord[];
-  budgetItems: BudgetItem[];
-  safetyData: DashboardSafetyResponse;
-  participantsPayload: DashboardParticipantsResponse;
+  checklist: ChecklistItem[];
+  promotions: PromotionRecord[];
+  budget: BudgetItem[];
+  safety: {
+    gate_status: PhaseGateResult[];
+  };
+  subject_severity_counts: Record<'mild' | 'moderate' | 'severe', number>;
+  institution_totals: {
+    mou_count: number;
+    active_subject_count: number;
+    consent_count: number;
+    staff_count: number;
+  };
+  institutions: InstitutionAggregateSummary[];
 }
 
 type ChecklistRow = Omit<ChecklistItem, 'required' | 'completed'> & {
@@ -45,28 +41,21 @@ type BudgetRow = Omit<BudgetItem, 'receipt_attached' | 'active'> & {
   active: number;
 };
 
-type SubjectRow = Omit<Subject, 'consent_signed' | 'participation_phases' | 'dropout'> & {
-  consent_signed: number;
-  participation_phases: string;
-  dropout: number;
+type InstitutionSummaryRow = Omit<InstitutionAggregateSummary, 'mou_signed'> & {
+  mou_signed: number;
 };
 
-function parseNumberArray(value: string | null | undefined) {
-  if (!value) {
-    return [] as number[];
-  }
-
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    if (!Array.isArray(parsed)) {
-      return [] as number[];
-    }
-
-    return parsed.filter((item): item is number => typeof item === 'number');
-  } catch {
-    return [] as number[];
-  }
-}
+type DashboardQueryRow = {
+  kpis: KpiItem[];
+  workshops: Workshop[];
+  checklist: ChecklistRow[];
+  promotions: PromotionRecord[];
+  budget: BudgetRow[];
+  safety_checklist: ChecklistRow[];
+  subject_severity_counts: PublicDashboardResponse['subject_severity_counts'];
+  institution_totals: PublicDashboardResponse['institution_totals'];
+  institutions: InstitutionSummaryRow[];
+};
 
 function toChecklistItem(row: ChecklistRow): ChecklistItem {
   return {
@@ -84,51 +73,254 @@ function toBudgetItem(row: BudgetRow): BudgetItem {
   };
 }
 
-function toSubject(row: SubjectRow): Subject {
+function toInstitutionSummary(
+  row: InstitutionSummaryRow
+): InstitutionAggregateSummary {
   return {
     ...row,
-    consent_signed: Boolean(row.consent_signed),
-    participation_phases: parseNumberArray(row.participation_phases),
-    dropout: Boolean(row.dropout),
+    mou_signed: Boolean(row.mou_signed),
   };
 }
 
-async function loadDashboardData(): Promise<DashboardResponse> {
+async function loadPublicDashboardData(): Promise<PublicDashboardResponse> {
   await seedDb();
 
-  const kpiItems = await dbQuery<KpiItem>('SELECT * FROM kpi_items ORDER BY category ASC, id ASC');
-  const workshops = await dbQuery<Workshop>('SELECT * FROM workshops ORDER BY scheduled_date ASC, id ASC');
-  const checklistRows = await dbQuery<ChecklistRow>('SELECT * FROM checklist_items ORDER BY phase ASC, id ASC');
-  const promotionItems = await dbQuery<PromotionRecord>(
-    'SELECT * FROM promotion_records ORDER BY published_date DESC, id DESC'
-  );
-  const budgetRows = await dbQuery<BudgetRow>('SELECT * FROM budget_items ORDER BY id ASC');
-  const subjectRows = await dbQuery<SubjectRow>('SELECT * FROM subjects ORDER BY code ASC');
+  const row = await dbQueryOne<DashboardQueryRow>(`
+    SELECT
+      COALESCE(
+        (
+          SELECT json_agg(
+            json_build_object(
+              'id', item.id,
+              'category', item.category,
+              'indicator', item.indicator,
+              'target', item.target,
+              'current', item.current,
+              'unit', item.unit,
+              'trend', item.trend,
+              'phase_related', item.phase_related,
+              'notes', ''
+            )
+            ORDER BY item.category ASC, item.id ASC
+          )
+          FROM kpi_items AS item
+        ),
+        '[]'::json
+      ) AS kpis,
+      COALESCE(
+        (
+          SELECT json_agg(
+            json_build_object(
+              'id', item.id,
+              'title', item.title,
+              'type', item.type,
+              'phase', item.phase,
+              'scheduled_date', item.scheduled_date,
+              'actual_date', item.actual_date,
+              'location', '',
+              'facilitator_id', NULL,
+              'participants_count', item.participants_count,
+              'status', item.status,
+              'description', '',
+              'outcome_summary', ''
+            )
+            ORDER BY item.scheduled_date ASC, item.id ASC
+          )
+          FROM workshops AS item
+        ),
+        '[]'::json
+      ) AS workshops,
+      COALESCE(
+        (
+          SELECT json_agg(
+            json_build_object(
+              'id', item.id,
+              'phase', item.phase,
+              'category', item.category,
+              'title', item.title,
+              'description', '',
+              'required', item.required,
+              'completed', item.completed,
+              'completed_date', item.completed_date,
+              'completed_by', NULL,
+              'evidence_note', ''
+            )
+            ORDER BY item.phase ASC, item.id ASC
+          )
+          FROM checklist_items AS item
+        ),
+        '[]'::json
+      ) AS checklist,
+      COALESCE(
+        (
+          SELECT json_agg(
+            json_build_object(
+              'id', item.id,
+              'channel', item.channel,
+              'title', item.title,
+              'published_date', item.published_date,
+              'phase', item.phase,
+              'reach_count', item.reach_count,
+              'url', item.url,
+              'status', item.status,
+              'notes', ''
+            )
+            ORDER BY item.published_date DESC NULLS LAST, item.id DESC
+          )
+          FROM promotion_records AS item
+          WHERE item.status = 'completed'
+        ),
+        '[]'::json
+      ) AS promotions,
+      COALESCE(
+        (
+          SELECT json_agg(
+            json_build_object(
+              'id', item.id,
+              'category', item.category,
+              'item_name', '',
+              'planned_amount', item.planned_amount,
+              'actual_amount', item.actual_amount,
+              'payment_date', item.payment_date,
+              'payee', '',
+              'receipt_attached', FALSE,
+              'phase', item.phase,
+              'active', item.active,
+              'notes', ''
+            )
+            ORDER BY item.id ASC
+          )
+          FROM budget_items AS item
+          WHERE item.active = 1
+        ),
+        '[]'::json
+      ) AS budget,
+      COALESCE(
+        (
+          SELECT json_agg(
+            json_build_object(
+              'id', item.id,
+              'phase', item.phase,
+              'category', item.category,
+              'title', item.title,
+              'description', '',
+              'required', item.required,
+              'completed', item.completed,
+              'completed_date', item.completed_date,
+              'completed_by', NULL,
+              'evidence_note', ''
+            )
+            ORDER BY item.phase ASC, item.id ASC
+          )
+          FROM checklist_items AS item
+          WHERE item.category = 'safety'
+        ),
+        '[]'::json
+      ) AS safety_checklist,
+      json_build_object(
+        'mild', (
+          SELECT COUNT(*)
+          FROM subjects
+          WHERE dementia_stage IN ('mild', 'mild_cognitive') AND dropout = 0
+        ),
+        'moderate', (
+          SELECT COUNT(*)
+          FROM subjects
+          WHERE dementia_stage = 'moderate' AND dropout = 0
+        ),
+        'severe', (
+          SELECT COUNT(*)
+          FROM subjects
+          WHERE dementia_stage = 'severe' AND dropout = 0
+        )
+      ) AS subject_severity_counts,
+      json_build_object(
+        'mou_count', (SELECT COUNT(*) FROM institutions WHERE mou_signed = 1),
+        'active_subject_count', (SELECT COUNT(*) FROM subjects WHERE dropout = 0),
+        'consent_count', (SELECT COUNT(*) FROM subjects WHERE consent_signed = 1),
+        'staff_count', (
+          SELECT COUNT(*)
+          FROM participants
+          WHERE role = 'institution_staff' AND active = 1
+        )
+      ) AS institution_totals,
+      COALESCE(
+        (
+          SELECT json_agg(item ORDER BY item.name ASC, item.id ASC)
+          FROM (
+            SELECT
+              institutions.id,
+              institutions.name,
+              institutions.type,
+              institutions.mou_signed,
+              CASE
+                WHEN COUNT(subjects.id) >= 5 THEN COUNT(subjects.id)
+                ELSE -1
+              END AS subject_count,
+              CASE
+                WHEN COUNT(subjects.id) FILTER (WHERE subjects.dropout = 0) >= 5
+                  THEN COUNT(subjects.id) FILTER (WHERE subjects.dropout = 0)
+                ELSE -1
+              END AS active_subject_count,
+              CASE
+                WHEN COUNT(subjects.id) FILTER (WHERE subjects.consent_signed = 1) >= 5
+                  THEN COUNT(subjects.id) FILTER (WHERE subjects.consent_signed = 1)
+                ELSE -1
+              END AS consent_count,
+              (
+                SELECT COUNT(*)
+                FROM participants
+                WHERE participants.role = 'institution_staff'
+                  AND participants.active = 1
+                  AND participants.affiliation = institutions.name
+              ) AS staff_count
+            FROM institutions
+            LEFT JOIN subjects ON subjects.institution_id = institutions.id
+            GROUP BY
+              institutions.id,
+              institutions.name,
+              institutions.type,
+              institutions.mou_signed
+          ) AS item
+        ),
+        '[]'::json
+      ) AS institutions
+  `);
 
-  const checklistItems = checklistRows.map(toChecklistItem);
-  const safetyChecklistItems = checklistItems.filter((item) => item.category === 'safety');
+  const checklist = (row?.checklist ?? []).map(toChecklistItem);
+  const safetyChecklist = (row?.safety_checklist ?? []).map(toChecklistItem);
 
   return {
-    kpiItems,
-    workshopPayload: {
-      workshops,
-      worksheetEntries: [],
+    kpis: row?.kpis ?? [],
+    workshops: row?.workshops ?? [],
+    checklist,
+    promotions: row?.promotions ?? [],
+    budget: (row?.budget ?? []).map(toBudgetItem),
+    safety: {
+      gate_status: calculatePhaseGateResults(safetyChecklist),
     },
-    checklistItems,
-    promotionItems,
-    budgetItems: budgetRows.map(toBudgetItem),
-    safetyData: {
-      gate_status: calculatePhaseGateResults(safetyChecklistItems),
+    subject_severity_counts: row?.subject_severity_counts ?? {
+      mild: 0,
+      moderate: 0,
+      severe: 0,
     },
-    participantsPayload: {
-      subjects: subjectRows.map(toSubject),
+    institution_totals: row?.institution_totals ?? {
+      mou_count: 0,
+      active_subject_count: 0,
+      consent_count: 0,
+      staff_count: 0,
     },
+    institutions: (row?.institutions ?? []).map(toInstitutionSummary),
   };
 }
 
-export const getDashboardData = loadDashboardData;
+export const getPublicDashboardData = loadPublicDashboardData;
 
-export const getCachedDashboardData = unstable_cache(loadDashboardData, ['dashboard-data'], {
-  revalidate: 60,
-  tags: ['dashboard-data'],
-});
+export const getCachedPublicDashboardData = unstable_cache(
+  loadPublicDashboardData,
+  ['public-dashboard-data-v2'],
+  {
+    revalidate: 60,
+    tags: ['dashboard-data'],
+  }
+);

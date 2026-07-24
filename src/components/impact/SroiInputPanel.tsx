@@ -71,18 +71,18 @@ export default function SroiInputPanel({
   return (
     <div className="space-y-4">
       <div className="rounded-[28px] p-5 text-white shadow-sm" style={{ background: '#46549C' }}>
-        <p className="text-[11px] text-white/70">사회적투자수익률 (SROI)</p>
+        <p className="text-[11px] text-white/70">사회적투자수익률 (SROI) 시나리오 추정</p>
         <p className="mt-2 text-[36px] font-semibold leading-none">
           {sroi.sroi.toFixed(2)}
           <span className="text-[18px] font-normal text-white/80"> : 1</span>
         </p>
         <p className="mt-2 text-[12px] text-white/80">
-          1원 투입 → {sroi.sroi.toFixed(2)}원의 사회적 가치 창출
+          1원 투입 → {sroi.sroi.toFixed(2)}원의 사회적 가치로 추정
         </p>
 
         <div className="mt-4 grid grid-cols-2 gap-3 border-t border-white/20 pt-4 text-[11px]">
           <div>
-            <p className="text-white/60">총 사회적 가치</p>
+            <p className="text-white/60">추정 총 사회적 가치</p>
             <p className="mt-1 font-medium text-white">{formatKRW(sroi.totalSocialValue)}</p>
           </div>
           <div>
@@ -98,6 +98,14 @@ export default function SroiInputPanel({
             <p className="mt-1 font-medium text-white">{formatKRW(input.totalBudget)}</p>
           </div>
         </div>
+      </div>
+
+      <div className="rounded-[24px] border border-amber-200 bg-amber-50 px-4 py-3">
+        <p className="text-[11px] font-semibold text-amber-800">방법론 검증 전 시나리오 값</p>
+        <p className="mt-1 text-[10px] leading-5 text-amber-700">
+          현재 값은 입력 가정과 대리값을 바탕으로 한 내부 검토용 추정치입니다. 귀인율·사중손실률·효과
+          감소율과 대리값의 외부 검증 전에는 공식 사업성과나 확정 절감액으로 사용하지 않습니다.
+        </p>
       </div>
 
       <div className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm">
