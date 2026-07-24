@@ -34,7 +34,6 @@ const nextConfig: NextConfig = {
           { key: 'Referrer-Policy', value: 'no-referrer' },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'X-Frame-Options', value: 'DENY' },
-          { key: 'X-Robots-Tag', value: 'noindex, nofollow, noarchive' },
           {
             key: 'Permissions-Policy',
             value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
@@ -49,10 +48,23 @@ const nextConfig: NextConfig = {
       {
         source: '/api/:path*',
         headers: [
+          { key: 'X-Robots-Tag', value: 'noindex, nofollow, noarchive' },
           {
             key: 'Cache-Control',
             value: 'private, no-store, max-age=0, must-revalidate',
           },
+        ],
+      },
+      {
+        source: '/admin/:path*',
+        headers: [
+          { key: 'X-Robots-Tag', value: 'noindex, nofollow, noarchive' },
+        ],
+      },
+      {
+        source: '/worksheets/:token',
+        headers: [
+          { key: 'X-Robots-Tag', value: 'noindex, nofollow, noarchive' },
         ],
       },
     ];
