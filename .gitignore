@@ -49,3 +49,6 @@ next-env.d.ts
 public/uploads/
 
 .vercel
+
+# Share placeholder settings only.
+!.env.example
