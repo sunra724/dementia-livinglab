@@ -1,0 +1,46 @@
+name: RLS security
+on:
+  push:
+    branches: [main, codex/rls-review-ci]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RLS_DISPOSABLE_DATABASE: 'true'
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+      DIRECT_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+      POSTGRES_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+      SUPABASE_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: node --test ci/rls/check-contracts.test.mjs
+      - uses: supabase/setup-cli@v3
+        with:
+          version: 2.120.0
+      - name: Start disposable local PostgreSQL 17
+        run: supabase db start
+      - name: Apply actual source and test security guard
+        run: node ci/rls/apply-and-check.mjs
+      - name: Real supabase test db
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase test db | tee supabase-test-db.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rls-security-results
+          path: |
+            supabase-test-db.log
+            rls-ci-evidence.json
+      - if: always()
+        run: supabase stop --no-backup

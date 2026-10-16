@@ -1,0 +1,7 @@
+{
+  "kind": "typescript-ddl",
+  "sources": [
+    "src/lib/schema.ts",
+    "src/lib/issue-store.ts"
+  ]
+}
