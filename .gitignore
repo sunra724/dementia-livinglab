@@ -52,3 +52,8 @@ public/uploads/
 
 # Share placeholder settings only.
 !.env.example
+
+# Disposable security verification artifacts
+/rls-ci-evidence.json
+/query-surface-evidence.json
+/supabase-test-db.log

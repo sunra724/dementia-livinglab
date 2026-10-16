@@ -1,0 +1,271 @@
+{
+  "source": "Audited catalog metadata, no rows or function bodies",
+  "collectedAt": "2026-10-14T08:11:50.992Z",
+  "ref": "whtwsdomvkktnpqbvcnt",
+  "existingRlsTables": [
+    {
+      "schema": "public",
+      "name": "institutions"
+    },
+    {
+      "schema": "public",
+      "name": "workshops"
+    },
+    {
+      "schema": "public",
+      "name": "worksheet_tokens"
+    },
+    {
+      "schema": "public",
+      "name": "safety_logs"
+    },
+    {
+      "schema": "public",
+      "name": "budget_items"
+    },
+    {
+      "schema": "public",
+      "name": "checklist_items"
+    },
+    {
+      "schema": "public",
+      "name": "facilitator_roles"
+    },
+    {
+      "schema": "public",
+      "name": "field_photos"
+    },
+    {
+      "schema": "public",
+      "name": "kpi_items"
+    },
+    {
+      "schema": "dementia_village",
+      "name": "improvement_sites"
+    },
+    {
+      "schema": "public",
+      "name": "promotion_records"
+    },
+    {
+      "schema": "public",
+      "name": "subjects"
+    },
+    {
+      "schema": "public",
+      "name": "worksheet_entries"
+    },
+    {
+      "schema": "dementia_village",
+      "name": "users"
+    },
+    {
+      "schema": "dementia_village",
+      "name": "participants"
+    },
+    {
+      "schema": "dementia_village",
+      "name": "assessment_tools"
+    },
+    {
+      "schema": "dementia_village",
+      "name": "assessment_items_master"
+    },
+    {
+      "schema": "dementia_village",
+      "name": "usability_tests"
+    },
+    {
+      "schema": "dementia_village",
+      "name": "households"
+    },
+    {
+      "schema": "dementia_village",
+      "name": "surveys"
+    },
+    {
+      "schema": "dementia_village",
+      "name": "assessments"
+    },
+    {
+      "schema": "dementia_village",
+      "name": "assessment_item_results"
+    },
+    {
+      "schema": "dementia_village",
+      "name": "expert_reviews"
+    },
+    {
+      "schema": "dementia_village",
+      "name": "purchaser_interviews"
+    },
+    {
+      "schema": "dementia_village",
+      "name": "product_packages"
+    },
+    {
+      "schema": "dementia_village",
+      "name": "project_deliverables"
+    },
+    {
+      "schema": "public",
+      "name": "organizations"
+    },
+    {
+      "schema": "public",
+      "name": "persons"
+    },
+    {
+      "schema": "public",
+      "name": "projects"
+    },
+    {
+      "schema": "public",
+      "name": "care_reference_cases"
+    },
+    {
+      "schema": "public",
+      "name": "care_cases"
+    },
+    {
+      "schema": "public",
+      "name": "care_reference_case_sources"
+    },
+    {
+      "schema": "public",
+      "name": "care_case_evidence_links"
+    },
+    {
+      "schema": "public",
+      "name": "care_reference_case_evidence_links"
+    },
+    {
+      "schema": "public",
+      "name": "care_issue_evidence_links"
+    },
+    {
+      "schema": "public",
+      "name": "care_actions"
+    },
+    {
+      "schema": "public",
+      "name": "care_action_evidence_links"
+    },
+    {
+      "schema": "public",
+      "name": "care_ecosystem_organizations"
+    },
+    {
+      "schema": "public",
+      "name": "care_organization_relationships"
+    },
+    {
+      "schema": "public",
+      "name": "care_issues"
+    },
+    {
+      "schema": "public",
+      "name": "care_issue_sources"
+    },
+    {
+      "schema": "public",
+      "name": "care_evidence"
+    },
+    {
+      "schema": "public",
+      "name": "public_data_providers"
+    },
+    {
+      "schema": "public",
+      "name": "public_data_datasets"
+    },
+    {
+      "schema": "public",
+      "name": "care_region_indicators"
+    },
+    {
+      "schema": "public",
+      "name": "care_service_facilities"
+    },
+    {
+      "schema": "public",
+      "name": "care_policy_signals"
+    },
+    {
+      "schema": "public",
+      "name": "care_research_projects"
+    },
+    {
+      "schema": "public",
+      "name": "care_admin_users"
+    },
+    {
+      "schema": "public",
+      "name": "public_data_sync_runs"
+    },
+    {
+      "schema": "public",
+      "name": "public_data_raw_records"
+    },
+    {
+      "schema": "public",
+      "name": "care_briefings"
+    },
+    {
+      "schema": "public",
+      "name": "care_source_snapshots"
+    },
+    {
+      "schema": "public",
+      "name": "care_briefing_promotions"
+    },
+    {
+      "schema": "public",
+      "name": "care_dossiers"
+    },
+    {
+      "schema": "public",
+      "name": "care_dossier_evidence"
+    },
+    {
+      "schema": "public",
+      "name": "care_dossier_issues"
+    },
+    {
+      "schema": "public",
+      "name": "care_dossier_briefings"
+    },
+    {
+      "schema": "public",
+      "name": "care_dossier_organizations"
+    },
+    {
+      "schema": "public",
+      "name": "care_dossier_milestones"
+    },
+    {
+      "schema": "public",
+      "name": "care_policy_reports"
+    },
+    {
+      "schema": "public",
+      "name": "care_proposals"
+    },
+    {
+      "schema": "public",
+      "name": "care_proposal_evidence"
+    },
+    {
+      "schema": "public",
+      "name": "care_proposal_issues"
+    },
+    {
+      "schema": "public",
+      "name": "care_proposal_briefings"
+    },
+    {
+      "schema": "public",
+      "name": "care_search_index"
+    }
+  ]
+}
