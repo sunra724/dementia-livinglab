@@ -16,7 +16,7 @@ const tracked=run('git',['ls-files','-z']).split('\0').filter(Boolean);
 const registered=new Set(source.sources);
 const unregistered=tracked.filter(f=>/\.(?:ts|tsx|sql|prisma)$/.test(f)&&/^(?:src|lib|app|supabase|prisma)\//.test(f)&&!f.startsWith('supabase/tests/')&&!f.startsWith('prisma/migrations_sqlite_backup/')&&!f.startsWith('src/generated/')&&/CREATE\s+TABLE\b/i.test(fs.readFileSync(f,'utf8'))&&!registered.has(f)&&!/^prisma\/migrations\/.+\/migration\.sql$/.test(f)&&!/^supabase\/migrations\/.+\.sql$/.test(f));
 if(unregistered.length)throw Error('Register and apply new DDL source files in schema-sources.json: '+unregistered.join(', '));
-sql("DO $$ BEGIN IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='audit_backend') THEN CREATE ROLE audit_backend NOLOGIN BYPASSRLS; END IF; END $; GRANT audit_backend TO postgres WITH SET TRUE;");
+sql("DO $audit_role$ BEGIN IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='audit_backend') THEN CREATE ROLE audit_backend NOLOGIN BYPASSRLS; END IF; END $audit_role$; GRANT audit_backend TO postgres WITH SET TRUE;");
 if(source.kind==='prisma'){
  const prisma=path.join('node_modules/prisma',JSON.parse(fs.readFileSync('node_modules/prisma/package.json','utf8')).bin.prisma);
  run(process.execPath,[prisma,'migrate','deploy']);
