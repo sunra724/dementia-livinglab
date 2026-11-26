@@ -12,8 +12,8 @@ export const metadata: Metadata = {
   description: '치매돌봄 리빙랩 6단계 전 과정을 관리하는 통합 대시보드',
   applicationName: '치매돌봄 리빙랩',
   robots: {
-    index: true,
-    follow: true,
+    index: false,
+    follow: false,
   },
   openGraph: {
     title: '치매돌봄 리빙랩 통합 성과관리 대시보드',
