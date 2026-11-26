@@ -30,6 +30,7 @@ const nextConfig: NextConfig = {
       {
         source: '/:path*',
         headers: [
+          { key: 'X-Robots-Tag', value: 'noindex, nofollow, noarchive' },
           { key: 'Content-Security-Policy', value: contentSecurityPolicy },
           { key: 'Referrer-Policy', value: 'no-referrer' },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
@@ -48,23 +49,10 @@ const nextConfig: NextConfig = {
       {
         source: '/api/:path*',
         headers: [
-          { key: 'X-Robots-Tag', value: 'noindex, nofollow, noarchive' },
           {
             key: 'Cache-Control',
             value: 'private, no-store, max-age=0, must-revalidate',
           },
-        ],
-      },
-      {
-        source: '/admin/:path*',
-        headers: [
-          { key: 'X-Robots-Tag', value: 'noindex, nofollow, noarchive' },
-        ],
-      },
-      {
-        source: '/worksheets/:token',
-        headers: [
-          { key: 'X-Robots-Tag', value: 'noindex, nofollow, noarchive' },
         ],
       },
     ];

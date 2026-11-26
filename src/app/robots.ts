@@ -7,7 +7,6 @@ export default function robots(): MetadataRoute.Robots {
       allow: '/',
       disallow: ['/admin/', '/api/', '/worksheets/'],
     },
-    sitemap: 'https://dementia-livinglab.soilabcoop.kr/sitemap.xml',
     host: 'https://dementia-livinglab.soilabcoop.kr',
   };
 }
